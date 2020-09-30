@@ -27,7 +27,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	
 	//Server State
 	private ServerState state;
-	//Server mode (FOLLOWER,CANDIDATE,LEADER;)
+	//Server mode (FOLLOWER,CANDIDATE,LEADER)
 	private Mode mode;
 	//Randomly picked timeOut in milliseconds to start an election
 	private long timeOut;
