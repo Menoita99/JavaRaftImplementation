@@ -1,10 +1,13 @@
 package com.raft;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.Serializable;
 import java.rmi.RemoteException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import com.raft.models.Address;
@@ -37,7 +40,12 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	
 	//Machine state
 	//This map contains the state of variables manipulated by client commands
-	private HashMap<String,Object> objects = new HashMap<>();	
+	private HashMap<String,Object> objects = new HashMap<>();
+
+	private String port,clusterString,timeOutIntervalString;
+
+	private Object timeOutInterval;
+
 	
 	public Server() {
 		init();
@@ -49,6 +57,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	
 	private void init() {
 		//TODO read configuration files
+		readIni();
 		//Initialise executor 
 		//load configurations (config.conf)
 		//check for checkpoint
@@ -61,6 +70,25 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	
 	
 	
+	private void readIni() {
+		port="";clusterString="";timeOutIntervalString="";
+		try {
+			Properties p = new Properties();
+			p.load(new FileInputStream("src/main/resources/config.ini"));
+			
+			port = p.getProperty("port");
+			clusterString = p.getProperty("cluster");
+			timeOutIntervalString = p.getProperty("timeOutInterval");
+		} catch (IOException e) {
+			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterString + "\n timeOutIntervalString : -> " +timeOutIntervalString);
+			e.printStackTrace();
+		}		
+	}
+
+
+
+
+
 	@Override
 	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
 		// TODO Auto-generated method stub
