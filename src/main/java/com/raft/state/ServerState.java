@@ -58,4 +58,13 @@ public class ServerState implements Serializable{
 		//TODO append long using writer
 		this.lastLog = lastLog;
 	}
+
+
+
+
+
+	public void appendLog(Log log) {
+		// TODO Auto-generated method stub
+		
+	}
 }
