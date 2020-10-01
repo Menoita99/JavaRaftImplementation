@@ -1,11 +1,13 @@
 package com.client;
 
+import java.awt.List;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Properties;
 
@@ -25,7 +27,9 @@ public class Client {
 
 	private ObjectOutputStream outToServer;
 	private ObjectInputStream inFromServer;
-
+	
+	private ArrayList<String[]> clusterList;
+	
 	public Client() {
 		readIni();
 		connectToServer();
@@ -33,6 +37,7 @@ public class Client {
 	
 	private void readIni() {
 		port="";
+		clusterList = new ArrayList<>();
 		try {
 			Properties p = new Properties();
 			p.load(new FileInputStream("src/main/resources/config.ini"));
@@ -44,7 +49,12 @@ public class Client {
 		} catch (IOException e) {
 			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterString + "\n timeOutIntervalString : -> " +timeOutIntervalString);
 			e.printStackTrace();
-		}		
+		}
+		String clusterVector[] = clusterString.split(";");
+		for(String ipPort : clusterVector) {
+			clusterList.add(ipPort.split(":"));
+		}
+
 	}
 
 	public void connectToServer() {
