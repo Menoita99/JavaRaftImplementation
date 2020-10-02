@@ -36,7 +36,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	//Server State
 	private ServerState state;
 	//Server mode (FOLLOWER,CANDIDATE,LEADER)
-	private Mode mode;
+	private Mode mode = Mode.FOLLOWER;
 	//Randomly picked timeOut in milliseconds to start an election
 	private int maxTimeOut;
 	private int minTimeOut;
@@ -126,31 +126,25 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	 */
 	@Override
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Log> entries, long leaderCommit) throws RemoteException {
-		boolean success = !(term<state.getCurrentTerm());
-
-		//TODO Ask to teacher about point 2
-		
-		if(entries.isEmpty()){//heartBeat
+		if(entries.isEmpty())//heartBeat
 			restartTimer();
-		}else {
+		else {
 			//sorts entries from log with minus index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 			
 			for (Log log : entries) {
 				Log lastLog = state.getLastLog();
+				if((log.getIndex() == lastLog.getIndex() && log.getTerm() != lastLog.getTerm()) || log.getIndex()<lastLog.getIndex())
+					if(mode == Mode.FOLLOWER)
+						state.override(log);
 				if(log.getIndex()>lastLog.getIndex())
 					state.appendLog(log);
-				
-				//TODO compare to previous logs and override if term is different
-				
 			}
-
 
 			if(leaderCommit > state.getCommitIndex())
 				state.setCommitIndex(Math.min(leaderCommit, state.getLastLog().getIndex()));
-
 		}
-		return new AppendResponse(state.getCurrentTerm(), success);
+		return new AppendResponse(state.getCurrentTerm(), state.hasLog(prevLogTerm,prevLogIndex));
 	}
 
 
