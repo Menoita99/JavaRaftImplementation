@@ -4,6 +4,7 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import com.raft.models.Address;
+import com.raft.models.ServerResponse;
 import com.raft.models.VoteResponse;
 import com.raft.state.LeaderState;
 
@@ -17,5 +18,5 @@ public abstract class LeaderBehavior implements Remote{
 	
 	public abstract VoteResponse requestVote(long term,Address candidateId, long lastLogIndex, long lastLogTerm) throws RemoteException;
 
-	public abstract void handleClientRequests();
+	public abstract ServerResponse request();
 }

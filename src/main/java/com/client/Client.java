@@ -7,7 +7,11 @@ import java.io.ObjectOutputStream;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.rmi.Naming;
 import java.util.Properties;
+
+import com.raft.Server;
+import com.raft.models.Address;
 
 public class Client {
 	
@@ -74,9 +78,11 @@ public class Client {
 			inFromServer = new ObjectInputStream(clientSocket.getInputStream());
 			outToServer = new ObjectOutputStream(clientSocket.getOutputStream());
 			
-			
-			
-			
+//            Java rmi code for client  rmi://[host][:port][/[object]]
+//			  Address add =  new Address(ip, port);
+//            Server server = (Server) Naming.lookup("rmi://"+ip+":"+"port"+port+"/server");
+//            ServerResponse response = server.request(params...);
+//            System.out.println("response: " + response);
 			
 			
 		} catch (UnknownHostException | ConnectException e) {

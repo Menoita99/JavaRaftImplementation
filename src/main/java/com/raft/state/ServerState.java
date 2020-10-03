@@ -85,6 +85,8 @@ public class ServerState implements Serializable{
 
 	public void appendLog(Log log) {
 		lastLog = log;
+		if(currentTerm != log.getTerm())
+			setCurrentTerm(log.getTerm());
 		logWriter.println(log);
 	}
 
@@ -93,6 +95,8 @@ public class ServerState implements Serializable{
 
 
 	public boolean hasLog(long term, long index) {
+		if(lastLog == null)
+			return false;
 		if(term==lastLog.getTerm() && index==lastLog.getIndex()) 
 			return true;
 		if(term>lastLog.getTerm() && index>lastLog.getIndex()) 

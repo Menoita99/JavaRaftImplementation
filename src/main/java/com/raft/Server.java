@@ -3,9 +3,8 @@ package com.raft;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.rmi.Naming;
 import java.rmi.RemoteException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -18,6 +17,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
 import com.raft.models.Log;
+import com.raft.models.ServerResponse;
 import com.raft.models.VoteResponse;
 import com.raft.state.Mode;
 import com.raft.state.ServerState;
@@ -74,7 +74,6 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		//check for checkpoint
 		//load state
 		//load rmi registry;
-		//Set mode to candidate or follower for first project stage
 	}
 
 
@@ -97,6 +96,8 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 			minTimeOut = Integer.parseInt(timeOutInterval[0]);
 			restartTimer();
 
+			//Regist this server 
+			Naming.rebind("rmi://"+p.getProperty("ip")+":"+"port"+p.getProperty("port")+"/server",this);
 		} catch (IOException e) {
 			//System.err.println("Config file not found")
 			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterString + "\n timeOutIntervalString : -> "+ timeOutInterval);
@@ -113,7 +114,6 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
 		// TODO Auto-generated method stub
 		//Follow paper implementation
-
 		return null;
 	}
 
@@ -126,10 +126,11 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	 */
 	@Override
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Log> entries, long leaderCommit) throws RemoteException {
+		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
 		if(entries.isEmpty())//heartBeat
 			restartTimer();
-		else {
-			//sorts entries from log with minus index to the log with the bigger index
+		else if(hasPreviousLog){
+			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 			
 			for (Log log : entries) {
@@ -144,29 +145,11 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 			if(leaderCommit > state.getCommitIndex())
 				state.setCommitIndex(Math.min(leaderCommit, state.getLastLog().getIndex()));
 		}
-		return new AppendResponse(state.getCurrentTerm(), state.hasLog(prevLogTerm,prevLogIndex));
+		return new AppendResponse(state.getCurrentTerm(), hasPreviousLog);
 	}
 
-
-
-
-
-
-	@Override
-	public void handleClientRequests() {
-		// TODO Auto-generated method stub
-
-	}
-
-
-
-	private class ServerTask implements Runnable{
-		@Override
-		public void run() {
-			// TODO Auto-generated method stub
-
-		}
-	}
+	
+	
 
 
 	/**
@@ -174,7 +157,9 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	 */
 	public void startElection() {
 		// TODO Auto-generated method stub
-		System.out.println("Starting Election");
+		if(mode == Mode.FOLLOWER) {
+			System.out.println("Starting Election");
+		}
 	}
 
 
@@ -193,11 +178,18 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
+	@Override
+	public ServerResponse request() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+	
+	
+	
+
 
 
 	public static void main(String[] args) {
-		List<Integer> of = new ArrayList<>(Arrays.asList(5,2,6,5,3,6,5));
-		of.sort((o1,o2) -> o1-o2);
-		of.forEach(System.out::println);
+		new Server();
 	}
 }
