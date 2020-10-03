@@ -4,9 +4,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.net.InetAddress;
+import java.net.ConnectException;
 import java.net.Socket;
-import java.util.ArrayList;
+import java.net.UnknownHostException;
 import java.util.Properties;
 
 public class Client {
@@ -19,12 +19,12 @@ public class Client {
  * cada comando do cliente tem o mesmo id
  **/
 	
-	private String port,clusterString,timeOutIntervalString,ipServer;
+	private String port,clusterMembers,timeOutIntervalString,ipServer;
 	private String clientID;
 	private ObjectOutputStream outToServer;
 	private ObjectInputStream inFromServer;
-	
-	private ArrayList<String[]> clusterList;
+	private int tryCount = -1;
+	private String clusterMembersVector[];
 	
 	public Client() {
 		readIni();
@@ -32,30 +32,28 @@ public class Client {
 	}
 	
 	private void readIni() {
-		port="";
-		ipServer="";
-		clusterList = new ArrayList<>();
 		
 		try {
 			Properties p = new Properties();
 			p.load(new FileInputStream("src/main/resources/config.ini"));
 			
-			port = p.getProperty("port");
-			ipServer = p.getProperty("ip");
-			clusterString = p.getProperty("cluster");
+			clusterMembers = p.getProperty("cluster");
 			timeOutIntervalString = p.getProperty("timeOutInterval");
-			clientID = ipServer + port;
-			clusterString += "";
+//			clientID = ipServer + port;
 		
 		} catch (IOException e) {
-			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterString + "\n timeOutIntervalString : -> " +timeOutIntervalString);
+//			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterMembers + "\n timeOutIntervalString : -> " +timeOutIntervalString);
 			e.printStackTrace();
 		}
-		String clusterVector[] = clusterString.split(";");
-		for(String ipPort : clusterVector) {
-			clusterList.add(ipPort.split(":"));
-			System.out.println(ipPort);
-		}
+		
+		clusterMembersVector = clusterMembers.split(";");
+		
+		
+		
+//		for(String ipPort : clusterMembersVector) {
+//			clusterList.add(ipPort.split(":"));
+//			System.out.println(ipPort);
+//		}
 	}
 
 	public String generateFullLog(String log) {
@@ -66,14 +64,24 @@ public class Client {
 	
 	public void connectToServer() {
 		Socket clientSocket;
+		tryCount++;
 		try {
-			clientSocket = new Socket(ipServer, getClusterPorts());
+			String ip = clusterMembersVector[tryCount].split(":")[0];
+			String port = clusterMembersVector[tryCount].split(":")[1];
+			
+			clientSocket = new Socket(ip, Integer.parseInt(port));
 			
 			inFromServer = new ObjectInputStream(clientSocket.getInputStream());
 			outToServer = new ObjectOutputStream(clientSocket.getOutputStream());
-			while (true) {				
-				String message = "";
-			}
+			
+			
+			
+			
+			
+			
+		} catch (UnknownHostException | ConnectException e) {
+			System.out.println("This cluster member is offline");
+			connectToServer();
 		} catch (IOException e) {
 			e.printStackTrace();
 		} 
