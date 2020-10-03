@@ -118,9 +118,20 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	@Override
 	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
 		shouldBecameFollower(term);
-		// TODO Auto-generated method stub
-		//Follow paper implementation
-		return null;
+		// TODO CHECK FOR IMPLEMENTATION
+		boolean voteGranted = false;
+		VoteResponse resposta = new VoteResponse(this.state.getCurrentTerm(), voteGranted);
+				
+		if (term < this.state.getCurrentTerm()) {
+			return resposta;
+		}else {
+			if (this.state.getVotedFor() == null || this.state.getVotedFor().equals(candidateId)
+					&& this.state.getCommitIndex() == lastLogIndex && this.state.getCurrentTerm() == lastLogTerm) {
+				resposta.setVoteGranted(true);
+			}
+		}
+		
+		return resposta;
 	}
 
 
