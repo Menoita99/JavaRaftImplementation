@@ -95,8 +95,6 @@ public class ServerState implements Serializable{
 
 
 	public boolean hasLog(long term, long index) {
-		if(lastLog == null)
-			return false;
 		if(term==lastLog.getTerm() && index==lastLog.getIndex()) 
 			return true;
 		if(term>lastLog.getTerm() && index>lastLog.getIndex()) 

@@ -78,7 +78,7 @@ public class Client {
 			inFromServer = new ObjectInputStream(clientSocket.getInputStream());
 			outToServer = new ObjectOutputStream(clientSocket.getOutputStream());
 			
-//            Java rmi code for client  rmi://[host][:port][/[object]]
+//            Java rmi code for client  
 //			  Address add =  new Address(ip, port);
 //            Server server = (Server) Naming.lookup("rmi://"+ip+":"+"port"+port+"/server");
 //            ServerResponse response = server.request(params...);

@@ -1,10 +1,12 @@
 package com.raft;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -12,7 +14,12 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
@@ -31,7 +38,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	private static final long serialVersionUID = 1L;
 
-	private ThreadPoolExecutor executor;
+	private ExecutorService  executor;
 
 	//Server State
 	private ServerState state;
@@ -55,7 +62,6 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	private String port,clusterString;
 
-	private Object timeOutInterval;
 
 
 	public Server() {
@@ -66,9 +72,15 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
+
 	private void init() {
-		//TODO read configuration files
-		readIni();
+		try {
+			this.state = new ServerState();
+			readIni();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
 		//Initialise executor 
 		//load configurations (config.conf)
 		//check for checkpoint
@@ -81,28 +93,23 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-	private void readIni() {
+	private void readIni() throws FileNotFoundException, IOException {
 		port="";clusterString="";
-		try {
-			Properties p = new Properties();
-			p.load(new FileInputStream("src/main/resources/config.ini"));
+		Properties p = new Properties();
+		p.load(new FileInputStream("src/main/resources/config.ini"));
 
-			port = p.getProperty("port");
-			//Usa esta string para ir buscar os servidores ao registo rmi  e po-los na lista cluster
-			clusterString = p.getProperty("cluster");
+		port = p.getProperty("port");
+		//Usa esta string para ir buscar os servidores ao registo rmi  e po-los na lista cluster
+		clusterString = p.getProperty("cluster");
+		executor = Executors.newFixedThreadPool(clusterString.split(";").length);
 
-			String[] timeOutInterval = p.getProperty("timeOutInterval").trim().split(",");
-			maxTimeOut = Integer.parseInt(timeOutInterval[1]);
-			minTimeOut = Integer.parseInt(timeOutInterval[0]);
-			restartTimer();
+		String[] timeOutInterval = p.getProperty("timeOutInterval").trim().split(",");
+		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
+		minTimeOut = Integer.parseInt(timeOutInterval[0]);
+		restartTimer();
 
-			//Regist this server 
-			Naming.rebind("rmi://"+p.getProperty("ip")+":"+"port"+p.getProperty("port")+"/server",this);
-		} catch (IOException e) {
-			//System.err.println("Config file not found")
-			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterString + "\n timeOutIntervalString : -> "+ timeOutInterval);
-			e.printStackTrace();
-		}		
+		//Regist this server 
+		Naming.rebind("rmi://"+p.getProperty("ip")+":"+"port"+p.getProperty("port")+"/server",this);
 	}
 
 
@@ -121,18 +128,20 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
+
 	/**
 	 * Method called by leader to replicate log entries and also used as heartbeat
 	 */
 	@Override
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Log> entries, long leaderCommit) throws RemoteException {
 		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
+		shouldBecameFollower(term);
 		if(entries.isEmpty())//heartBeat
 			restartTimer();
 		else if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
-			
+
 			for (Log log : entries) {
 				Log lastLog = state.getLastLog();
 				if((log.getIndex() == lastLog.getIndex() && log.getTerm() != lastLog.getTerm()) || log.getIndex()<lastLog.getIndex())
@@ -148,19 +157,31 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		return new AppendResponse(state.getCurrentTerm(), hasPreviousLog);
 	}
 
-	
-	
 
 
-	/**
-	 * This method is called by timer when
-	 */
+
+
+	private void shouldBecameFollower(long term) {
+		if(mode == Mode.FOLLOWER)
+			return;
+		if(term > state.getCurrentTerm()) {
+			mode = Mode.FOLLOWER;
+			restartTimer();
+		}
+	}
+
+
+
+
+
+
 	public void startElection() {
 		// TODO Auto-generated method stub
 		if(mode == Mode.FOLLOWER) {
 			System.out.println("Starting Election");
 		}
 	}
+
 
 
 
@@ -178,14 +199,40 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
+
 	@Override
 	public ServerResponse request() {
-		// TODO Auto-generated method stub
+		switch (mode) {
+			case  FOLLOWER: {
+				//TODO
+				return null;
+			}
+			case CANDIDATE:{
+				//TODO
+				return null;
+			}case LEADER:{
+	
+				List<Future<AppendResponse>> futures = new ArrayList<>();
+				for (Server server : cluster) 
+					futures.add(executor.submit(() -> server.appendEntries(0, null, 0, 0, null, 0)));
+				List<AppendResponse> responses = new ArrayList<>();
+				for (Future<AppendResponse> future : futures) {
+					try {
+						responses.add(future.get(500, TimeUnit.MILLISECONDS));
+					} catch (InterruptedException | ExecutionException | TimeoutException e) {
+						System.err.println("Server failed to response");
+						continue;
+					}
+				}
+				return null;
+				//TODO
+			}
+		}
 		return null;
 	}
-	
-	
-	
+
+
+
 
 
 
