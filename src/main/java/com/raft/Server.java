@@ -58,7 +58,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	//This object will notify server when it must change mode to candidate and start an election
 	private Timer timer = new Timer();
 
-
+	private Address leaderId;
 
 	private String port,clusterString;
 
@@ -81,10 +81,8 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 			e.printStackTrace();
 		}
 
-		//Initialise executor 
 		//load configurations (config.conf)
 		//check for checkpoint
-		//load state
 		//load rmi registry;
 	}
 
@@ -119,6 +117,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	@Override
 	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
+		shouldBecameFollower(term);
 		// TODO Auto-generated method stub
 		//Follow paper implementation
 		return null;
@@ -134,8 +133,11 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	 */
 	@Override
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Log> entries, long leaderCommit) throws RemoteException {
-		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
+		this.leaderId = leaderId;
 		shouldBecameFollower(term);
+		
+		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
+		
 		if(entries.isEmpty())//heartBeat
 			restartTimer();
 		else if(hasPreviousLog){
@@ -204,8 +206,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	public ServerResponse request() {
 		switch (mode) {
 			case  FOLLOWER: {
-				//TODO
-				return null;
+				return new ServerResponse(leaderId, null);
 			}
 			case CANDIDATE:{
 				//TODO
@@ -231,7 +232,20 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		return null;
 	}
 
+	
 
+
+
+
+	@Override
+	public long InstallSnapshot(long term, Address leaderId, long lastIncludedIndex, long lastIncludedTerm, long offset,byte[] data, boolean done) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+	
+	
+	
+	
 
 
 

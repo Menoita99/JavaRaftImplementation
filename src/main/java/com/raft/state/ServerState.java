@@ -2,11 +2,13 @@ package com.raft.state;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.util.Properties;
+import java.util.Scanner;
 
 import com.raft.models.Address;
 import com.raft.models.Log;
@@ -44,7 +46,11 @@ public class ServerState implements Serializable{
 
 	public ServerState() throws IOException {
 		stateProperties = new Properties();
+		new File(STATE_FILE).createNewFile();
 		stateProperties.load(new FileInputStream(STATE_FILE));
+		currentTerm = Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0"));
+		votedFor = Address.parse((String) stateProperties.getOrDefault("votedFor", null));
+		
 		File logFile = new File(LOG_FILE);
 		logFile.createNewFile();
 		logWriter = new PrintWriter(logFile); 
@@ -100,7 +106,14 @@ public class ServerState implements Serializable{
 		if(term>lastLog.getTerm() && index>lastLog.getIndex()) 
 			return false;
 		if(term<lastLog.getTerm() || index<lastLog.getIndex()) {
-			//TODO
+			try(Scanner s = new Scanner(new File(LOG_FILE))){
+				//TODO
+				s.skip("");
+				String line = s.nextLine();
+				return line.isBlank() ? false : true;
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			}
 			return false;
 		}
 		return false;
@@ -111,7 +124,21 @@ public class ServerState implements Serializable{
 
 
 	public void override(Log log) {
-		// TODO Auto-generated method stub
-
+		try {
+			File temp = File.createTempFile("temp", ".tmp");
+			File logFile = new File(LOG_FILE);
+			try(PrintWriter pw = new PrintWriter(temp)) {
+				try(Scanner s = new Scanner(logFile)){
+					while (s.hasNext()) {
+						String line = s.nextLine();
+						//TODO
+						pw.println(line);
+					}
+					temp.renameTo(logFile);
+				}
+			}
+		}catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }
