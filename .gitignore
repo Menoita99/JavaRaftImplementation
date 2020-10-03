@@ -1,1 +1,9 @@
 /target/
+target/classes/META-INF/maven/Raft/Raft/pom.xml
+target/classes/META-INF/maven/Raft/Raft/pom.properties
+target/classes/META-INF/MANIFEST.MF
+target/classes/config.ini
+target/classes/com/raft/Server.class
+target/classes/com/raft/LeaderBehavior.class
+target/classes/com/client/Client.class
+.classpath
