@@ -17,12 +17,9 @@ public class Client {
  * 			se o lider crasha ele volta a escolher um server random
  * 
  * cada comando do cliente tem o mesmo id
- * 
- * 
- * 
- * 
- * */
-	private String port,clusterString,timeOutIntervalString,localhost;
+ **/
+	
+	private String port,clusterString,timeOutIntervalString,ipServer;
 	private String clientID;
 	private ObjectOutputStream outToServer;
 	private ObjectInputStream inFromServer;
@@ -36,17 +33,19 @@ public class Client {
 	
 	private void readIni() {
 		port="";
-		localhost="";
+		ipServer="";
 		clusterList = new ArrayList<>();
+		
 		try {
 			Properties p = new Properties();
 			p.load(new FileInputStream("src/main/resources/config.ini"));
 			
 			port = p.getProperty("port");
-			localhost = p.getProperty("ip");
+			ipServer = p.getProperty("ip");
 			clusterString = p.getProperty("cluster");
-			timeOutIntervalString = p.getProperty(timeOutIntervalString);
-			clientID = localhost + port;
+			timeOutIntervalString = p.getProperty("timeOutInterval");
+			clientID = ipServer + port;
+			clusterString += "";
 		
 		} catch (IOException e) {
 			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterString + "\n timeOutIntervalString : -> " +timeOutIntervalString);
@@ -55,68 +54,34 @@ public class Client {
 		String clusterVector[] = clusterString.split(";");
 		for(String ipPort : clusterVector) {
 			clusterList.add(ipPort.split(":"));
+			System.out.println(ipPort);
 		}
-
 	}
 
-	
 	public String generateFullLog(String log) {
-		
 		String logID = clientID + System.currentTimeMillis();
-		
-		String generatedLog = logID + "-" + log;
-		
+		String generatedLog = logID + "-" + log;	
 		return generatedLog;
 	}
-	
-	
-	
-	public String request (String log) {
-		String stringReceived = "";
-		Object objectReceived;
-		try {
-		
-			outToServer.writeObject(generateFullLog(log));
-			
-			//TODO: Timeout
-		
-			objectReceived = inFromServer.readObject();
-			stringReceived = (String) objectReceived;
-			
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		
-		
-		
-		return stringReceived;
-		
-	}
-	
 	
 	public void connectToServer() {
 		Socket clientSocket;
 		try {
-			InetAddress host = InetAddress.getLocalHost();
-			clientSocket = new Socket(host, Integer.parseInt(port));
-
+			clientSocket = new Socket(ipServer, getClusterPorts());
+			
 			inFromServer = new ObjectInputStream(clientSocket.getInputStream());
-			
 			outToServer = new ObjectOutputStream(clientSocket.getOutputStream());
-			
-//			outToServer.writeObject("client");
-
-			while (true) {
-				
+			while (true) {				
 				String message = "";
-				request(message);
-				
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		} 
+	}
+
+	private int getClusterPorts() {
+		//return clusterList.get(Math.floor(Math.random() * clusterList.size()));
+	return 0;
 	}
 	
 }
