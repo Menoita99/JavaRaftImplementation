@@ -1,11 +1,13 @@
 package com.raft;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.rmi.Naming;
+import java.rmi.AlreadyBoundException;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -60,8 +62,6 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	private Address leaderId;
 
-	private String port,clusterString;
-
 
 
 	public Server() {
@@ -77,7 +77,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		try {
 			this.state = new ServerState();
 			readIni();
-		} catch (IOException e) {
+		} catch (IOException | AlreadyBoundException e) {
 			e.printStackTrace();
 		}
 
@@ -91,23 +91,22 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-	private void readIni() throws FileNotFoundException, IOException {
-		port="";clusterString="";
+	private void readIni() throws  IOException, AlreadyBoundException {
 		Properties p = new Properties();
 		p.load(new FileInputStream("src/main/resources/config.ini"));
 
-		port = p.getProperty("port");
-		//Usa esta string para ir buscar os servidores ao registo rmi  e po-los na lista cluster
-		clusterString = p.getProperty("cluster");
+		int port = Integer.parseInt(p.getProperty("port"));
+		String clusterString = p.getProperty("cluster");
 		executor = Executors.newFixedThreadPool(clusterString.split(";").length);
 
 		String[] timeOutInterval = p.getProperty("timeOutInterval").trim().split(",");
 		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
-		restartTimer();
 
 		//Regist this server 
-		Naming.rebind("rmi://"+p.getProperty("ip")+":"+"port"+p.getProperty("port")+"/server",this);
+		Registry registry = LocateRegistry.createRegistry(port);
+		registry.bind("rmi://"+p.getProperty("ip")+":"+port+"/server", UnicastRemoteObject.exportObject(this, 0));
+		restartTimer();
 	}
 
 
@@ -202,10 +201,11 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	private void restartTimer() {
 		timer.cancel();
+		timer = new Timer();
 		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
 		timer.schedule(new TimerTask() {
-			public void run() {startElection();}
-		}, 10, timeOut);
+			public void run() {System.out.println("Start Election in "+timeOut+"ms");startElection();}
+		}, timeOut);
 	}
 
 
@@ -230,7 +230,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 				List<AppendResponse> responses = new ArrayList<>();
 				for (Future<AppendResponse> future : futures) {
 					try {
-						responses.add(future.get(500, TimeUnit.MILLISECONDS));
+						responses.add(future.get(200, TimeUnit.MILLISECONDS));
 					} catch (InterruptedException | ExecutionException | TimeoutException e) {
 						System.err.println("Server failed to response");
 						continue;
