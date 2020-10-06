@@ -32,13 +32,14 @@ import com.raft.models.ServerResponse;
 import com.raft.models.VoteResponse;
 import com.raft.state.Mode;
 import com.raft.state.ServerState;
+import com.rmi.RMIInterface;
 
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class Server extends LeaderBehavior implements Serializable, FollowerBehavior {
+public class Server extends LeaderBehavior implements Serializable, FollowerBehavior, RMIInterface {
 
 	private static final long serialVersionUID = 1L;
 
@@ -66,7 +67,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-	public Server() {
+	public Server() throws RemoteException{
 		init();
 	}
 
@@ -206,17 +207,21 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 	@Override
-	public ServerResponse request(String string) {
+	public ServerResponse request(String string) throws RemoteException{
+		
+		//TEMP
+		this.mode=Mode.LEADER;
+		//TEMP
+		
 		switch (mode) {
-			case  FOLLOWER: {
-				System.out.println("é bem ze89");
+			case FOLLOWER: {
+				System.out.println("case follower");
 				return new ServerResponse(leaderId, null);
 			}
 			case CANDIDATE:{
 				//TODO
 				return null;
 			}case LEADER:{
-	
 				List<Future<AppendResponse>> futures = new ArrayList<>();
 				for (Server server : cluster) 
 					futures.add(executor.submit(() -> server.appendEntries(0, null, 0, 0, null, 0)));
@@ -230,8 +235,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 					}
 				}
 				
-				return new ServerResponse(null, "abcdtest");
-				
+				return new ServerResponse(null, "sou o lider, recebi " + string + " respondi ao cliente com test123");
 			}
 		}
 		return null;

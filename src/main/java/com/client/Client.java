@@ -13,9 +13,11 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.Properties;
 
+import com.raft.LeaderBehavior;
 import com.raft.Server;
 import com.raft.models.Address;
 import com.raft.models.ServerResponse;
+import com.rmi.RMIInterface;
 
 public class Client {
 
@@ -29,11 +31,9 @@ public class Client {
 
 	private String port, clusterMembers, timeOutIntervalString, ipServer;
 	private String clientID;
-	private ObjectOutputStream outToServer;
-	private ObjectInputStream inFromServer;
 	private int tryCount = -1;
 	private String clusterMembersVector[];
-	private Server server;
+	private static RMIInterface look_up;
 
 	public Client() {
 		readIni();
@@ -60,7 +60,7 @@ public class Client {
 	}
 
 	public String generateFullLog(String log) {
-		String logID = clientID + System.currentTimeMillis();
+		String logID = "clientID" + System.currentTimeMillis();
 		String generatedLog = logID + "-" + log;
 		return generatedLog;
 	}
@@ -73,22 +73,24 @@ public class Client {
 		String port = clusterMembersVector[tryCount].split(":")[1];
 		System.out.println(ip + ":"+port);
 		Address address = new Address(ip, Integer.parseInt(port));
-
+		
 		try {
-			server = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
-
-			ServerResponse response = server.request(generateFullLog("abcdtest"));
+			
+			look_up = (RMIInterface) Naming.lookup("rmi://" + ip + ":" + port + "/server");
+			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
 
 			// If the Object of the ServerResponse instance is null, that means it received
 			// the Address of the leader. Try reconnect to leader
-			if (response.getResponse().equals(null)) {
+			if (response.getResponse()==null) {
 				ip = response.getLeader().getIpAddress();
 				port = String.valueOf(response.getLeader().getPort());
-				server = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
+				look_up = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
 
-				response = server.request(generateFullLog("abcdtest"));
+				response = look_up.request(generateFullLog("abcdtest"));
 			}
 
+			System.out.println(response.toString());
+			
 		} catch (NotBoundException | MalformedURLException | RemoteException e) {
 			System.out.println("This cluster member is offline");
 			connectToServer();
@@ -101,5 +103,9 @@ public class Client {
 	//            ServerResponse response = server.request(params...);
 	//            System.out.println("response: " + response);
 
+	public static void main(String[] args) {
+		new Client();
+	}
+	
 
 }
