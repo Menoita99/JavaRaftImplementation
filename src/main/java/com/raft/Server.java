@@ -3,7 +3,9 @@ package com.raft;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.MalformedURLException;
 import java.rmi.AlreadyBoundException;
+import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -207,6 +209,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	public ServerResponse request(String string) {
 		switch (mode) {
 			case  FOLLOWER: {
+				System.out.println("é bem ze89");
 				return new ServerResponse(leaderId, null);
 			}
 			case CANDIDATE:{
@@ -250,6 +253,14 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 	public static void main(String[] args) {
-		new Server();
+		try {
+			Naming.rebind("rmi://" + "127.0.0.1" + ":"+ 1000 + "/server", new Server());
+		} catch (RemoteException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 }

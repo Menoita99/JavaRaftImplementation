@@ -16,13 +16,6 @@ public class Address {
 	private String ipAddress;
 	private int port;
 
-
-	public Address (String ip, int port) {
-		this.ipAddress = ip;
-		this.port = port;
-	}
-	
-
 	public static Address parse(String s) {
 		if(s == null || s.isBlank())
 			return null;

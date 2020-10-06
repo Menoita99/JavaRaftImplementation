@@ -12,13 +12,6 @@ public class ServerResponse implements Serializable {
 	private Address leader;
 	private Object response;
 	
-	
-	public ServerResponse (Address leader, Object response) {
-		this.leader = leader;
-		this.response = response;
-	}
-
-
 	public Address getLeader() {
 		return leader;
 	}

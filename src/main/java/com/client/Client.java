@@ -48,10 +48,10 @@ public class Client {
 
 			clusterMembers = p.getProperty("cluster");
 			timeOutIntervalString = p.getProperty("timeOutInterval");
-//			clientID = ipServer + port;
+			//			clientID = ipServer + port;
 
 		} catch (IOException e) {
-//			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterMembers + "\n timeOutIntervalString : -> " +timeOutIntervalString);
+			//			System.err.println("Port : -> " + port + "\nClusterString : -> " + clusterMembers + "\n timeOutIntervalString : -> " +timeOutIntervalString);
 			e.printStackTrace();
 		}
 
@@ -66,14 +66,16 @@ public class Client {
 	}
 
 	public void connectToServer() {
+		if(tryCount==2)
+			return;
 		tryCount++;
 		String ip = clusterMembersVector[tryCount].split(":")[0];
 		String port = clusterMembersVector[tryCount].split(":")[1];
-
+		System.out.println(ip + ":"+port);
 		Address address = new Address(ip, Integer.parseInt(port));
 
 		try {
-			server = (Server) Naming.lookup("rmi://" + ip + ":" + "port" + port + "/server");
+			server = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
 
 			ServerResponse response = server.request(generateFullLog("abcdtest"));
 
@@ -82,7 +84,7 @@ public class Client {
 			if (response.getResponse().equals(null)) {
 				ip = response.getLeader().getIpAddress();
 				port = String.valueOf(response.getLeader().getPort());
-				server = (Server) Naming.lookup("rmi://" + ip + ":" + "port" + port + "/server");
+				server = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
 
 				response = server.request(generateFullLog("abcdtest"));
 			}
@@ -93,11 +95,11 @@ public class Client {
 		}
 	}
 
-//            Java rmi code for client  
-//			  Address add =  new Address(ip, port);
-//            Server server = (Server) Naming.lookup("rmi://"+ip+":"+"port"+port+"/server");
-//            ServerResponse response = server.request(params...);
-//            System.out.println("response: " + response);
+	//            Java rmi code for client  
+	//			  Address add =  new Address(ip, port);
+	//            Server server = (Server) Naming.lookup("rmi://"+ip+":"+"port"+port+"/server");
+	//            ServerResponse response = server.request(params...);
+	//            System.out.println("response: " + response);
 
 
 }
