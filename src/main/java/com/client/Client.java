@@ -66,7 +66,7 @@ public class Client {
 	}
 
 	public void connectToServer() {
-		if(tryCount==2)
+		if(tryCount==clusterMembersVector.length)
 			return;
 		tryCount++;
 		String ip = clusterMembersVector[tryCount].split(":")[0];
