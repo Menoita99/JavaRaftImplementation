@@ -18,5 +18,5 @@ public abstract class LeaderBehavior implements Remote{
 	
 	public abstract VoteResponse requestVote(long term,Address candidateId, long lastLogIndex, long lastLogTerm) throws RemoteException;
 
-	public abstract ServerResponse request();
+	public abstract ServerResponse request(String string);
 }

@@ -17,6 +17,11 @@ public class Address {
 	private int port;
 
 
+	public Address (String ip, int port) {
+		this.ipAddress = ip;
+		this.port = port;
+	}
+	
 
 	public static Address parse(String s) {
 		if(s == null || s.isBlank())
@@ -55,4 +60,17 @@ public class Address {
 		} catch (IOException e) {e.printStackTrace();}
 		return null;
 	}
+
+
+	public String getIpAddress() {
+		return ipAddress;
+	}
+
+
+	public int getPort() {
+		return port;
+	}
+	
+	
+	
 }

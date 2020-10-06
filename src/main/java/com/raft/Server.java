@@ -70,9 +70,6 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-
-
-
 	private void init() {
 		try {
 			this.state = new ServerState();
@@ -85,9 +82,6 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		//check for checkpoint
 		//load rmi registry;
 	}
-
-
-
 
 
 
@@ -112,8 +106,6 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-
-
 	@Override
 	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
 		shouldBecameFollower(term);
@@ -132,8 +124,6 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		
 		return resposta;
 	}
-
-
 
 
 
@@ -214,7 +204,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 	@Override
-	public ServerResponse request() {
+	public ServerResponse request(String string) {
 		switch (mode) {
 			case  FOLLOWER: {
 				return new ServerResponse(leaderId, null);
@@ -232,19 +222,17 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 					try {
 						responses.add(future.get(200, TimeUnit.MILLISECONDS));
 					} catch (InterruptedException | ExecutionException | TimeoutException e) {
-						System.err.println("Server failed to response");
+						System.err.println("Server failed to respond");
 						continue;
 					}
 				}
-				return null;
-				//TODO
+				
+				return new ServerResponse(null, "abcdtest");
+				
 			}
 		}
 		return null;
 	}
-
-	
-
 
 
 
