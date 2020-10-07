@@ -15,6 +15,7 @@ import com.raft.LeaderBehaviour;
 import com.raft.models.Address;
 import com.raft.models.ServerResponse;
 
+import javafx.beans.property.SimpleStringProperty;
 import lombok.Data;
 
 @Data
@@ -34,8 +35,8 @@ public class Client {
 	private String clusterMembersVector[];
 	private LeaderBehaviour look_up;
 
-	private String leaderPort;
-	private String leaderIp;
+	private SimpleStringProperty leaderPort;
+	private SimpleStringProperty leaderIp;
 	
 	
 	
@@ -99,21 +100,21 @@ public class Client {
 
 		//Suggestion use a for loop instead of a recursive method
 		tryCount++;
-		leaderIp = clusterMembersVector[tryCount].split(":")[0];
-		leaderPort = clusterMembersVector[tryCount].split(":")[1];
-		System.out.println("Request ->"+leaderIp + ":"+leaderPort);
+		leaderIp = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[0]);
+		leaderPort = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[1]);
+		System.out.println("Request ->"+leaderIp.get() + ":"+leaderPort.get());
 
 		try {
 
-			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp + ":" + leaderPort + "/server");
+			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/server");
 
 			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
 			// If the Object of the ServerResponse instance is null, that means it received
 			// the Address of the leader. Try reconnect to leader
 			if (response.getResponse()==null) {
-				leaderIp = response.getLeader().getIpAddress();
-				leaderPort = String.valueOf(response.getLeader().getPort());
-				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp + ":" + leaderPort + "/server");
+				leaderIp.set(response.getLeader().getIpAddress());
+				leaderPort.set(String.valueOf(response.getLeader().getPort()));
+				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/server");
 				response = look_up.request(logsList.get(0));
 				System.out.println("Follower answer:"+response);
 

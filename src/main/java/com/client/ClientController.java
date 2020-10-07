@@ -1,8 +1,10 @@
 package com.client;
 
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.URL;
+import java.rmi.RemoteException;
 import java.util.ResourceBundle;
 
 import com.raft.models.ServerResponse;
@@ -42,8 +44,9 @@ public class ClientController extends Application implements Initializable{
 		client = new Client();
 		ipClient.setText(client.getAddress().getIpAddress());
 		portClient.setText(client.getAddress().getPort()+"");
-		ipLeader.setText(client.getLeaderIp());
-		portLeader.setText(client.getLeaderPort());
+		ipLeader.textProperty().bind((client.getLeaderIp()));
+		portLeader.textProperty().bind((client.getLeaderPort()));
+		textArea.setEditable(false);
 	}
 
 	
@@ -63,8 +66,9 @@ public class ClientController extends Application implements Initializable{
 	    	textArea.appendText("> "+command+"\n");
 			ServerResponse reponse = client.executeCommand(command);
 	    	textField.clear();
-	    	textArea.appendText(reponse.getResponse().toString()+"\n");
-    	}catch (Exception e) {
+	    	if(reponse.getResponse() == null) textArea.appendText("\n");
+	    	else textArea.appendText(reponse.getResponse().toString()+"\n");
+    	}catch (RemoteException e) {
     		showErrorDialog(e);
 		}
     }
@@ -77,11 +81,13 @@ public class ClientController extends Application implements Initializable{
 	 */
 	public void showErrorDialog(Exception exception) {
 		Alert alert = new Alert(AlertType.ERROR);
-		alert.setTitle("Exception Dialog");
+		alert.setTitle(exception.getClass().toString());
 		alert.setHeaderText(null);
 
 		StringWriter sw = new StringWriter();
 		PrintWriter pw = new PrintWriter(sw);
+		pw.println("Error message : "+exception.getMessage());
+		pw.println();
 		exception.printStackTrace(pw);
 		String exceptionText = sw.toString();
 

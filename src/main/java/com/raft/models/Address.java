@@ -20,6 +20,7 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class Address implements Serializable{
+	private static final long serialVersionUID = 1L;
 	private String ipAddress; //IP address
 	private int port;		  //port
 

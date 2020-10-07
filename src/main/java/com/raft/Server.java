@@ -52,7 +52,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private Timer timer = new Timer();
 
 	private Address leaderId;
-	
 	private Address selfId;
 
 
@@ -89,10 +88,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
 		System.out.println("Server "+p.getProperty("ip")+":"+port);
-		
+
 		leaderId = new Address(p.getProperty("liderIp"), Integer.parseInt(p.getProperty("liderPort")));
 		System.out.println(leaderId);
-		
+
 		Registry registry = LocateRegistry.createRegistry(port);
 		LeaderBehaviour object = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
 		registry.bind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
@@ -288,13 +287,19 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @param string client command
 	 * @return ServerResponse
 	 */
-	private ServerResponse leaderResponse(String string) {
+	private ServerResponse leaderResponse(String command) {
 		ServerResponse serverResponse;
-		if(string==null)
-		 serverResponse = new ServerResponse(leaderId,  null);
+		if(command==null || command.isBlank())
+			serverResponse = new ServerResponse(leaderId,  null);
 		else {
-			 serverResponse = new ServerResponse(leaderId,  string);
-
+			serverResponse = new ServerResponse(leaderId,  command);
+		}
+		//This line executes the command
+		try {
+			serverResponse.setResponse(state.getInterpreter().execute(command));
+		}catch (Exception e) {
+			serverResponse.setResponse(e);
+			e.printStackTrace();
 		}
 		return serverResponse;
 	}
