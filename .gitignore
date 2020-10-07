@@ -7,3 +7,8 @@ target/classes/com/raft/Server.class
 target/classes/com/raft/LeaderBehavior.class
 target/classes/com/client/Client.class
 .classpath
+target/classes/com/raft/Server.class
+target/classes/config.ini
+target/classes/META-INF/MANIFEST.MF
+target/classes/META-INF/maven/Raft/Raft/pom.properties
+target/classes/META-INF/maven/Raft/Raft/pom.xml
