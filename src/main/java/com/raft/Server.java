@@ -10,7 +10,6 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -18,12 +17,8 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
@@ -67,19 +62,12 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 	public Server(){
-		init();
-	}
-
-
-
-	private void init() {
 		try {
 			this.state = new ServerState();
 			readIni();
 		} catch (IOException | AlreadyBoundException e) {
 			e.printStackTrace();
 		}
-
 		//load configurations (config.conf)
 		//check for checkpoint
 		//load rmi registry;
@@ -87,6 +75,12 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
+
+
+
+	/**
+	 * Reads configuration file and initializes attributes
+	 */
 	private void readIni() throws  IOException, AlreadyBoundException {
 		Properties p = new Properties();
 		p.load(new FileInputStream("src/main/resources/config.ini"));
@@ -108,6 +102,10 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
+	
+	/**
+	 * Method used by Candidates to request votes
+	 */
 	@Override
 	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
 		shouldBecameFollower(term);
@@ -130,6 +128,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
+	
 	/**
 	 * Method called by leader to replicate log entries and also used as heartbeat
 	 */
@@ -164,7 +163,12 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-
+	
+	
+	
+	/**
+	 * Verifies if this server must became a follower
+	 */
 	private void shouldBecameFollower(long term) {
 		if(mode == Mode.FOLLOWER)
 			return;
@@ -178,7 +182,9 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-
+	/**
+	 * Method called by Timer when an election must be started
+	 */
 	public void startElection() {
 		// TODO Auto-generated method stub
 		if(mode == Mode.FOLLOWER) {
@@ -190,7 +196,10 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-
+	/**
+	 * Restarts the timer that will trigger an election with a random value 
+	 * between minTimeOut and maxTimeOut
+	 */
 	private void restartTimer() {
 		timer.cancel();
 		timer = new Timer();
@@ -204,7 +213,13 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-
+	
+	/**
+	 * RPC called by the client to execute a certain command
+	 * if current server is a follower it returns an empty response only containing leader's address
+	 * if current server is a candidate //TODO
+	 * if current server is a leader it executes {@link leaderResponse}
+	 */
 	@Override
 	public ServerResponse request(String string) throws RemoteException{
 
@@ -213,38 +228,43 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		//TEMP
 
 		switch (mode) {
-		case FOLLOWER: {
-			System.out.println("case follower");
-			return new ServerResponse(leaderId, null);
-		}
-		case CANDIDATE:{
-			//TODO
-			return null;
-		}case LEADER:{
-			List<Future<AppendResponse>> futures = new ArrayList<>();
-			for (Server server : cluster) 
-				futures.add(executor.submit(() -> server.appendEntries(0, null, 0, 0, null, 0)));
-			List<AppendResponse> responses = new ArrayList<>();
-			for (Future<AppendResponse> future : futures) {
-				try {
-					responses.add(future.get(200, TimeUnit.MILLISECONDS));
-				} catch (InterruptedException | ExecutionException | TimeoutException e) {
-					System.err.println("Server failed to respond");
-					continue;
-				}
+			case FOLLOWER: {
+				System.out.println("case follower");
+				return new ServerResponse(leaderId, null);
 			}
-
-			return new ServerResponse(null, "sou o lider, recebi " + string + " respondi ao cliente com test123");
-		}
+			case CANDIDATE:{
+				//TODO
+				return null;
+			}case LEADER:{
+				return leaderResponse(string);
+			}
 		}
 		return null;
 	}
 
 
 
+	
+	
+	/**
+	 * This method works as described by https://raft.github.io/raft.pdf paper "Rules for Servers" -> leader part
+	 * This method also use Java futures for multi-threading
+	 * @param string client command
+	 * @return
+	 */
+	private ServerResponse leaderResponse(String string) {
+		//TODO
+		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + string + " respondi ao cliente com test123");
+		return serverResponse;
+	}
 
 
 
+
+
+	/**
+	 * Method called by leader to compress log
+	 */
 	@Override
 	public long InstallSnapshot(long term, Address leaderId, long lastIncludedIndex, long lastIncludedTerm, long offset,byte[] data, boolean done) {
 		// TODO Auto-generated method stub
