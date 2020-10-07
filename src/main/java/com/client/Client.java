@@ -22,8 +22,6 @@ public class Client {
 	 **/
 
 	private String clusterMembers ;
-	//  private String timeOutIntervalString,timeOutIntervalString, ipServer ,port
-	//	private String clientID;
 	private int tryCount = -1;
 	private String clusterMembersVector[];
 
@@ -71,6 +69,7 @@ public class Client {
 		if(tryCount==clusterMembersVector.length)
 			return;
 		
+		//Suggestion use a for loop instead of a recursive method
 		tryCount++;
 		String ip = clusterMembersVector[tryCount].split(":")[0];
 		String port = clusterMembersVector[tryCount].split(":")[1];

@@ -266,7 +266,7 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 	 * This method works as described by https://raft.github.io/raft.pdf paper "Rules for Servers" -> leader part
 	 * This method also use Java futures for multi-threading
 	 * @param string client command
-	 * @return
+	 * @return ServerResponse
 	 */
 	private ServerResponse leaderResponse(String string) {
 		//TODO
@@ -296,6 +296,8 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 	 */
 	@Override
 	public long InstallSnapshot(long term, Address leaderId, long lastIncludedIndex, long lastIncludedTerm, long offset,byte[] data, boolean done) {
+		this.leaderId = leaderId;
+		shouldBecameFollower(term);
 		// TODO Auto-generated method stub
 		return 0;
 	}
