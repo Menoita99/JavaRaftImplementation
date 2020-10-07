@@ -32,14 +32,13 @@ import com.raft.models.ServerResponse;
 import com.raft.models.VoteResponse;
 import com.raft.state.Mode;
 import com.raft.state.ServerState;
-import com.rmi.RMIInterface;
 
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class Server extends LeaderBehavior implements Serializable, FollowerBehavior, RMIInterface {
+public class Server extends LeaderBehavior implements Serializable, FollowerBehavior{
 
 	private static final long serialVersionUID = 1L;
 
@@ -67,7 +66,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
-	public Server() throws RemoteException{
+	public Server(){
 		init();
 	}
 
@@ -115,7 +114,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		// TODO CHECK FOR IMPLEMENTATION
 		boolean voteGranted = false;
 		VoteResponse resposta = new VoteResponse(this.state.getCurrentTerm(), voteGranted);
-				
+
 		if (term < this.state.getCurrentTerm()) {
 			return resposta;
 		}else {
@@ -124,7 +123,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 				resposta.setVoteGranted(true);
 			}
 		}
-		
+
 		return resposta;
 	}
 
@@ -138,9 +137,9 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Log> entries, long leaderCommit) throws RemoteException {
 		this.leaderId = leaderId;
 		shouldBecameFollower(term);
-		
+
 		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
-		
+
 		if(entries.isEmpty())//heartBeat
 			restartTimer();
 		else if(hasPreviousLog){
@@ -208,38 +207,41 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	@Override
 	public ServerResponse request(String string) throws RemoteException{
-		
+
 		//TEMP
 		this.mode=Mode.LEADER;
 		//TEMP
-		
+
 		switch (mode) {
-			case FOLLOWER: {
-				System.out.println("case follower");
-				return new ServerResponse(leaderId, null);
-			}
-			case CANDIDATE:{
-				//TODO
-				return null;
-			}case LEADER:{
-				List<Future<AppendResponse>> futures = new ArrayList<>();
-				for (Server server : cluster) 
-					futures.add(executor.submit(() -> server.appendEntries(0, null, 0, 0, null, 0)));
-				List<AppendResponse> responses = new ArrayList<>();
-				for (Future<AppendResponse> future : futures) {
-					try {
-						responses.add(future.get(200, TimeUnit.MILLISECONDS));
-					} catch (InterruptedException | ExecutionException | TimeoutException e) {
-						System.err.println("Server failed to respond");
-						continue;
-					}
+		case FOLLOWER: {
+			System.out.println("case follower");
+			return new ServerResponse(leaderId, null);
+		}
+		case CANDIDATE:{
+			//TODO
+			return null;
+		}case LEADER:{
+			List<Future<AppendResponse>> futures = new ArrayList<>();
+			for (Server server : cluster) 
+				futures.add(executor.submit(() -> server.appendEntries(0, null, 0, 0, null, 0)));
+			List<AppendResponse> responses = new ArrayList<>();
+			for (Future<AppendResponse> future : futures) {
+				try {
+					responses.add(future.get(200, TimeUnit.MILLISECONDS));
+				} catch (InterruptedException | ExecutionException | TimeoutException e) {
+					System.err.println("Server failed to respond");
+					continue;
 				}
-				
-				return new ServerResponse(null, "sou o lider, recebi " + string + " respondi ao cliente com test123");
 			}
+
+			return new ServerResponse(null, "sou o lider, recebi " + string + " respondi ao cliente com test123");
+		}
 		}
 		return null;
 	}
+
+
+
 
 
 
@@ -248,23 +250,15 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		// TODO Auto-generated method stub
 		return 0;
 	}
-	
-	
-	
-	
 
 
 
 
-	public static void main(String[] args) {
-		try {
-			Naming.rebind("rmi://" + "127.0.0.1" + ":"+ 1000 + "/server", new Server());
-		} catch (RemoteException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (MalformedURLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+
+
+
+
+	public static void main(String[] args) throws RemoteException, MalformedURLException {
+		Naming.rebind("rmi://" + "127.0.0.1" + ":"+ 1000 + "/server", new Server());
 	}
 }
