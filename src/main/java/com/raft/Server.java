@@ -105,10 +105,10 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 	
 	/**
 	 * Invoked by candidates to gather votes 
-	 * @param term candidate’s term
+	 * @param term candidateï¿½s term
 	 * @param candidateId candidate requesting vote
-	 * @param lastLogIndex index of candidate’s last log entry
-	 * @param lastLogTerm term of candidate’s last log entry
+	 * @param lastLogIndex index of candidateï¿½s last log entry
+	 * @param lastLogTerm term of candidateï¿½s last log entry
 	 * @return VoteResponse
 	 * @throws RemoteException extends Remote Interface
 	 */
@@ -137,12 +137,12 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 	
 	/**
 	 * Method Invoked by leader to replicate log entries; also used as heartbeat 
-	 * @param term leader’s term
+	 * @param term leaderï¿½s term
 	 * @param leaderId so follower can redirect clients
 	 * @param prevLogIndex index of log entry immediately preceding new ones
 	 * @param prevLogTerm term of prevLogIndex entry
 	 * @param entries log entries to store (empty for heartbeat; may send more than one for efficiency)
-	 * @param leaderCommit leader’s commitIndex
+	 * @param leaderCommit leaderï¿½s commitIndex
 	 * @return AppendResponse
 	 * @throws RemoteException extends Remote Interface
 	 */
@@ -246,7 +246,7 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 		switch (mode) {
 			case FOLLOWER: {
 				System.out.println("case follower");
-				return new ServerResponse(leaderId, null);
+				return new ServerResponse(leaderId, leaderId);
 			}
 			case CANDIDATE:{
 				//TODO
@@ -284,7 +284,7 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 	 */
 	/**
 	 * Method Invoked by leader to send chunks of a snapshot to a follower. Leaders always send chunks in order.
-	 * @param term leader’s term
+	 * @param term leaderï¿½s term
 	 * @param leaderId so follower can redirect clients
 	 * @param lastIncludedIndex the snapshot replaces all entries up through and including this index
 	 * @param lastIncludedTerm term of lastIncludedIndex
@@ -312,4 +312,16 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 	public static void main(String[] args) throws RemoteException, MalformedURLException {
 		Naming.rebind("rmi://" + "127.0.0.1" + ":"+ 1000 + "/server", new Server());
 	}
+
+
+
+
+
+
+	@Override
+	public ServerResponse requestLeader(String command) throws RemoteException {
+		// TODO Auto-generated method stub
+		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + command + " respondi ao cliente com test123");
+		return serverResponse;	
+		}
 }

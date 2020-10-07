@@ -24,15 +24,11 @@ public class Client {
 	private String clusterMembers ;
 	private int tryCount = -1;
 	private String clusterMembersVector[];
-
+	private Server look_up;
 	public Client() {
 		readIni();
 		connectToServer();
 	}
-
-
-
-
 
 
 	private void readIni() {
@@ -41,17 +37,12 @@ public class Client {
 			p.load(new FileInputStream("src/main/resources/config.ini"));
 
 			clusterMembers = p.getProperty("cluster");
-			//			clientID = ipServer + port;
 
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		clusterMembersVector = clusterMembers.split(";");
 	}
-
-
-
-
 
 
 	public String generateFullLog(String log) {
@@ -61,27 +52,24 @@ public class Client {
 	}
 
 
-
-
-
-
 	public void connectToServer() {
-		if(tryCount==clusterMembersVector.length)
+		if(tryCount==clusterMembersVector.length-1)
 			return;
 		
 		//Suggestion use a for loop instead of a recursive method
 		tryCount++;
 		String ip = clusterMembersVector[tryCount].split(":")[0];
 		String port = clusterMembersVector[tryCount].split(":")[1];
-		System.out.println(ip + ":"+port);
+		System.out.println("Request ->"+ip + ":"+port);
 
 		try {
 
-			Server look_up = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
-			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
+			look_up = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
 
+			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
 			// If the Object of the ServerResponse instance is null, that means it received
 			// the Address of the leader. Try reconnect to leader
+			System.out.println(response.toString());
 			if (response.getResponse()==null) {
 				ip = response.getLeader().getIpAddress();
 				port = String.valueOf(response.getLeader().getPort());
