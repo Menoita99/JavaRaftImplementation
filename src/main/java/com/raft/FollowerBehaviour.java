@@ -49,6 +49,6 @@ public interface FollowerBehaviour extends Remote{
 	public long InstallSnapshot(long term, Address leaderId,long lastIncludedIndex,long lastIncludedTerm,long offset, byte[] data, boolean done) throws RemoteException;
 
 	
-	public ServerResponse requestLeader(String command) throws RemoteException;
+	public ServerResponse requestLeader() throws RemoteException;
 
 }

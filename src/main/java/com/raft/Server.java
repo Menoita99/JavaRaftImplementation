@@ -75,8 +75,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 
-
-
+	//temp para testar, alterar depois o port abaixo 87: int port = .... e apagar l79
+	private int port;
 	/**
 	 * Reads configuration file and initialises attributes
 	 */
@@ -84,18 +84,24 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		Properties p = new Properties();
 		p.load(new FileInputStream("src/main/resources/config.ini"));
 
-		int port = Integer.parseInt(p.getProperty("port"));
+		port = Integer.parseInt(p.getProperty("port"));
 		String clusterString = p.getProperty("cluster");
 		executor = Executors.newFixedThreadPool(clusterString.split(";").length);
 
 		String[] timeOutInterval = p.getProperty("timeOutInterval").trim().split(",");
 		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
-
-		Registry registry = LocateRegistry.createRegistry(1000);
+		System.out.println("Server "+p.getProperty("ip")+":"+port);
+		
+		leaderId = new Address(p.getProperty("liderIp"), Integer.parseInt(p.getProperty("liderPort")));
+		System.out.println(leaderId);
+		
+		Registry registry = LocateRegistry.createRegistry(port);
 		LeaderBehaviour object = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
 		registry.bind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
-		Naming.rebind("rmi://" + "127.0.0.1" + ":"+ 1000 + "/server", object);
+		Naming.rebind("rmi://"+p.getProperty("ip")+":"+ port+"/server", object);
+		
+		
 		restartTimer();
 	}
 
@@ -240,13 +246,16 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	public ServerResponse request(String string) throws RemoteException{
 
 		//TEMP
-		this.mode=Mode.LEADER;
+		if(port == 1000)
+			this.mode=Mode.LEADER;
+		else {
+			this.mode=Mode.FOLLOWER;
+		}
 		//TEMP
 
 		switch (mode) {
 		case FOLLOWER: {
-			System.out.println("case follower");
-			return new ServerResponse(leaderId, leaderId);
+			return requestLeader();
 		}
 		case CANDIDATE:{
 			//TODO
@@ -271,7 +280,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private ServerResponse leaderResponse(String string) {
 		//TODO
 		System.out.println("received "+string);
-		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + string + " respondi ao cliente com test123");
+		//dar add ao comando (por decidir)
+		ServerResponse serverResponse = new ServerResponse(null,  string + ";test123");
 		return serverResponse;
 	}
 
@@ -309,9 +319,9 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 	@Override
-	public ServerResponse requestLeader(String command) throws RemoteException {
+	public ServerResponse requestLeader() throws RemoteException {
 		// TODO Auto-generated method stub
-		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + command + " respondi ao cliente com test123");
+		ServerResponse serverResponse = new ServerResponse(leaderId,"not today");
 		return serverResponse;	
 	}
 }
