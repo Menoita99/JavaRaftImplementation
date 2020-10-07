@@ -10,6 +10,7 @@ import java.io.Serializable;
 import java.util.Properties;
 import java.util.Scanner;
 
+import com.raft.interpreter.Interpreter;
 import com.raft.models.Address;
 import com.raft.models.Log;
 
@@ -48,6 +49,7 @@ public class ServerState implements Serializable{
 	private long commitIndex = 0;
 	private long lastApplied = 0;
 
+	private Interpreter interpreter = new Interpreter();
 
 	
 	public ServerState() throws IOException {

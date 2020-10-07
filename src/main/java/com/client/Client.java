@@ -10,8 +10,12 @@ import java.util.Properties;
 
 import com.raft.LeaderBehaviour;
 import com.raft.Server;
+import com.raft.models.Address;
 import com.raft.models.ServerResponse;
 
+import lombok.Data;
+
+@Data
 public class Client {
 
 	/*
@@ -21,11 +25,18 @@ public class Client {
 	 * 
 	 * cada comando do cliente tem o mesmo id
 	 **/
-
+	private Address address;
+	
 	private String clusterMembers ;
 	private int tryCount = -1;
 	private String clusterMembersVector[];
 	private LeaderBehaviour look_up;
+
+	private String leaderPort;
+	private String leaderIp;
+	
+	
+	
 	public Client() {
 		readIni();
 		connectToServer();
@@ -36,8 +47,8 @@ public class Client {
 		try {
 			Properties p = new Properties();
 			p.load(new FileInputStream("src/main/resources/config.ini"));
-
 			clusterMembers = p.getProperty("cluster");
+			address = new Address(p.getProperty("ip"), Integer.parseInt(p.getProperty("port")));
 
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -59,22 +70,22 @@ public class Client {
 		
 		//Suggestion use a for loop instead of a recursive method
 		tryCount++;
-		String ip = clusterMembersVector[tryCount].split(":")[0];
-		String port = clusterMembersVector[tryCount].split(":")[1];
-		System.out.println("Request ->"+ip + ":"+port);
+		leaderIp = clusterMembersVector[tryCount].split(":")[0];
+		leaderPort = clusterMembersVector[tryCount].split(":")[1];
+		System.out.println("Request ->"+leaderIp + ":"+leaderPort);
 
 		try {
 
-			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + ip + ":" + port + "/server");
+			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp + ":" + leaderPort + "/server");
 
 			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
 			// If the Object of the ServerResponse instance is null, that means it received
 			// the Address of the leader. Try reconnect to leader
 			System.out.println(response.toString());
 			if (response.getResponse()==null) {
-				ip = response.getLeader().getIpAddress();
-				port = String.valueOf(response.getLeader().getPort());
-				look_up = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
+				leaderIp = response.getLeader().getIpAddress();
+				leaderPort = String.valueOf(response.getLeader().getPort());
+				look_up = (Server) Naming.lookup("rmi://" + leaderIp + ":" + leaderPort + "/server");
 
 				response = look_up.request(generateFullLog("abcdtest"));
 			}
@@ -86,4 +97,11 @@ public class Client {
 			connectToServer();
 		}
 	}
+
+
+	public ServerResponse executeCommand(String command) throws RemoteException {
+		//TODO façam aqui a vossa lógica dos logs
+		return look_up.request(command);
+	}
+	
 }

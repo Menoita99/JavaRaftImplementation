@@ -1,11 +1,12 @@
 package com.test;
 
-import com.client.Client;
+import com.client.ClientController;
 
 public class ClientTest {
 
 	public static void main(String[] args) {
-		new Client();
+//		new Client();
+		ClientController.main(args);
 	}
 
 }

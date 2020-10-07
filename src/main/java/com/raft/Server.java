@@ -9,7 +9,6 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
@@ -48,10 +47,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 	//Reference to the cluster servers to make RPC (remote procedure call)
 	private LinkedList<Server> cluster = new LinkedList<>();
-
-	//Machine state
-	//This map contains the state of variables manipulated by client commands
-	private HashMap<String,Object> objects = new HashMap<>();
 
 	//This object will notify server when it must change mode to candidate and start an election
 	private Timer timer = new Timer();
@@ -95,7 +90,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		Registry registry = LocateRegistry.createRegistry(1000);
 		LeaderBehaviour object = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
 		registry.bind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
-		Naming.rebind("rmi://" + "127.0.0.1" + ":"+ 1000 + "/server", object);
+		Naming.rebind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
 		restartTimer();
 	}
 
@@ -268,10 +263,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @param string client command
 	 * @return ServerResponse
 	 */
-	private ServerResponse leaderResponse(String string) {
+	private ServerResponse leaderResponse(String command) {
 		//TODO
-		System.out.println("received "+string);
-		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + string + " respondi ao cliente com test123");
+		System.out.println("received "+command);
+		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + command + " respondi ao cliente com test123");
 		return serverResponse;
 	}
 
@@ -301,17 +296,5 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		shouldBecameFollower(term);
 		// TODO Auto-generated method stub
 		return 0;
-	}
-
-
-
-
-
-
-	@Override
-	public ServerResponse requestLeader(String command) throws RemoteException {
-		// TODO Auto-generated method stub
-		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + command + " respondi ao cliente com test123");
-		return serverResponse;	
 	}
 }
