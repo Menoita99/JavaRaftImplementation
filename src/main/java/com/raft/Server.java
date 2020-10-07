@@ -1,5 +1,6 @@
 package com.raft;
 
+import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
@@ -9,14 +10,19 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
@@ -64,6 +70,25 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			e.printStackTrace();
 		}
 		//load configurations (config.conf)
+		/*
+		 * Using BufferedReaders we can check for the file checkpoint.bat?
+		 
+		try {
+			FileInputStream fis = new FileInputStream("src/main/resources/checkpoint.bat");
+			BufferedInputStream bis = new BufferedInputStream(fis);
+			//read entries one by one
+			//placeholder for now
+			//TODO
+			bis.readAllBytes();
+			
+			
+			
+			bis.close();
+			fis.close();
+		}catch (Exception e) {
+			e.printStackTrace();
+		}
+		*/
 		//check for checkpoint
 		//load rmi registry;
 	}
@@ -92,10 +117,18 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		leaderId = new Address(p.getProperty("liderIp"), Integer.parseInt(p.getProperty("liderPort")));
 		System.out.println(leaderId);
 
+		String ip = p.getProperty("ip");
+		System.out.println("Server "+ip+":"+port);
+		
+		leaderId = new Address(p.getProperty("liderIp"), Integer.parseInt(p.getProperty("liderPort")));
+		System.out.println(leaderId);
+		
+		selfId = new Address(ip, port);
+		
 		Registry registry = LocateRegistry.createRegistry(port);
 		LeaderBehaviour object = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
-		registry.bind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
-		Naming.rebind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
+		registry.bind("rmi://"+ip+":"+port+"/server", object);
+		Naming.rebind("rmi://"+ip+":"+port+"/server", object);
 		restartTimer();
 	}
 
@@ -201,23 +234,43 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	public void startElection() {
 		long currTerm = this.state.getCurrentTerm();
-		if(mode == Mode.FOLLOWER) {
+		if(mode == Mode.FOLLOWER || mode == Mode.CANDIDATE) {
 			System.out.println("Starting Election");
-			//Increments its current term
-			currTerm++;
+			ArrayList<Future<VoteResponse>> listFuture = new ArrayList<>();
+			this.state.setCurrentTerm(this.state.getCurrentTerm() +1);
 			//Transitions to the candidate state
 			mode = Mode.CANDIDATE;
 			//Votes for itself 
 			this.state.setVotedFor(this.selfId);
 			//Send RequestVote to every other Server
 			for(Server clstr : cluster) {
-				try {
-					clstr.requestVote(currTerm, selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm());
-				} catch (RemoteException e) {
-					e.printStackTrace();
-				}
+				//clstr.requestVote(currTerm, selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm());
+				//futuros
+				Future<VoteResponse> resp = executor.submit(()-> {
+					return clstr.requestVote(this.state.getCurrentTerm()
+							, selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm());
+				});
+				listFuture.add(resp);
 			}
+			int votes = 0;
+			
+			for(Future<VoteResponse> ftr : listFuture) {
+					try {
+						VoteResponse vote = ftr.get(500, TimeUnit.MILLISECONDS);
+						if(vote.isVoteGranted())
+							votes++;								
+					} catch (InterruptedException | ExecutionException | TimeoutException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				if (votes > cluster.size()/2)
+					mode = Mode.LEADER;
+				else if((double) votes / (double)cluster.size() == 0.5) {
+					startElection();
+				}
+			}	
 		}
+			
 	}
 
 
