@@ -52,6 +52,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private Timer timer = new Timer();
 
 	private Address leaderId;
+	
+	private Address selfId;
 
 
 
@@ -70,8 +72,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 
-
-
+	//temp para testar, alterar depois o port abaixo 87: int port = .... e apagar l79
+	private int port;
 	/**
 	 * Reads configuration file and initialises attributes
 	 */
@@ -79,15 +81,19 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		Properties p = new Properties();
 		p.load(new FileInputStream("src/main/resources/config.ini"));
 
-		int port = Integer.parseInt(p.getProperty("port"));
+		port = Integer.parseInt(p.getProperty("port"));
 		String clusterString = p.getProperty("cluster");
 		executor = Executors.newFixedThreadPool(clusterString.split(";").length);
 
 		String[] timeOutInterval = p.getProperty("timeOutInterval").trim().split(",");
 		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
-
-		Registry registry = LocateRegistry.createRegistry(1000);
+		System.out.println("Server "+p.getProperty("ip")+":"+port);
+		
+		leaderId = new Address(p.getProperty("liderIp"), Integer.parseInt(p.getProperty("liderPort")));
+		System.out.println(leaderId);
+		
+		Registry registry = LocateRegistry.createRegistry(port);
 		LeaderBehaviour object = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
 		registry.bind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
 		Naming.rebind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
@@ -195,11 +201,27 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * Method called by Timer when an election must be started
 	 */
 	public void startElection() {
-		// TODO Auto-generated method stub
+		long currTerm = this.state.getCurrentTerm();
 		if(mode == Mode.FOLLOWER) {
 			System.out.println("Starting Election");
+			//Increments its current term
+			currTerm++;
+			//Transitions to the candidate state
+			mode = Mode.CANDIDATE;
+			//Votes for itself 
+			this.state.setVotedFor(this.selfId);
+			//Send RequestVote to every other Server
+			for(Server clstr : cluster) {
+				try {
+					clstr.requestVote(currTerm, selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm());
+				} catch (RemoteException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
+
+
 
 
 
@@ -235,13 +257,16 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	public ServerResponse request(String string) throws RemoteException{
 
 		//TEMP
-		this.mode=Mode.LEADER;
+		if(port == 1000)
+			this.mode=Mode.LEADER;
+		else {
+			this.mode=Mode.FOLLOWER;
+		}
 		//TEMP
 
 		switch (mode) {
 		case FOLLOWER: {
-			System.out.println("case follower");
-			return new ServerResponse(leaderId, leaderId);
+			return leaderResponse(null);
 		}
 		case CANDIDATE:{
 			//TODO
@@ -263,10 +288,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @param string client command
 	 * @return ServerResponse
 	 */
-	private ServerResponse leaderResponse(String command) {
-		//TODO
-		System.out.println("received "+command);
-		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + command + " respondi ao cliente com test123");
+	private ServerResponse leaderResponse(String string) {
+		ServerResponse serverResponse;
+		if(string==null)
+		 serverResponse = new ServerResponse(leaderId,  null);
+		else {
+			 serverResponse = new ServerResponse(leaderId,  string);
+
+		}
 		return serverResponse;
 	}
 
