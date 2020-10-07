@@ -3,7 +3,6 @@ package com.raft;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.MalformedURLException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
@@ -33,7 +32,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class Server extends LeaderBehaviour implements Serializable, FollowerBehaviour{
+public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 	private static final long serialVersionUID = 1L;
 
@@ -93,16 +92,17 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
 
-		//Regist this server 
-		Registry registry = LocateRegistry.createRegistry(port);
-		registry.bind("rmi://"+p.getProperty("ip")+":"+port+"/server", UnicastRemoteObject.exportObject(this, 0));
+		Registry registry = LocateRegistry.createRegistry(1000);
+		LeaderBehaviour object = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
+		registry.bind("rmi://"+p.getProperty("ip")+":"+port+"/server", object);
+		Naming.rebind("rmi://" + "127.0.0.1" + ":"+ 1000 + "/server", object);
 		restartTimer();
 	}
 
 
 
 
-	
+
 	/**
 	 * Invoked by candidates to gather votes 
 	 * @param term candidate�s term
@@ -134,7 +134,7 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 
 
 
-	
+
 	/**
 	 * Method Invoked by leader to replicate log entries; also used as heartbeat 
 	 * @param term leader�s term
@@ -158,7 +158,7 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 		else if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
-			
+
 			for (Log log : entries) {
 				Log lastLog = state.getLastLog();
 				if((log.getIndex() == lastLog.getIndex() && log.getTerm() != lastLog.getTerm()) || log.getIndex()<lastLog.getIndex())
@@ -177,9 +177,9 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 
 
 
-	
-	
-	
+
+
+
 	/**
 	 * Verifies if this server must became a follower
 	 */
@@ -227,7 +227,7 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 
 
 
-	
+
 	/**
 	 * Method invoked by client to request the execution of the given command
 	 * if current server is a follower it returns an empty response only containing leader's address
@@ -244,24 +244,24 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 		//TEMP
 
 		switch (mode) {
-			case FOLLOWER: {
-				System.out.println("case follower");
-				return new ServerResponse(leaderId, leaderId);
-			}
-			case CANDIDATE:{
-				//TODO
-				return null;
-			}case LEADER:{
-				return leaderResponse(string);
-			}
+		case FOLLOWER: {
+			System.out.println("case follower");
+			return new ServerResponse(leaderId, leaderId);
+		}
+		case CANDIDATE:{
+			//TODO
+			return null;
+		}case LEADER:{
+			return leaderResponse(string);
+		}
 		}
 		return null;
 	}
 
 
 
-	
-	
+
+
 	/**
 	 * This method works as described by https://raft.github.io/raft.pdf paper "Rules for Servers" -> leader part
 	 * This method also use Java futures for multi-threading
@@ -270,6 +270,7 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 	 */
 	private ServerResponse leaderResponse(String string) {
 		//TODO
+		System.out.println("received "+string);
 		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + string + " respondi ao cliente com test123");
 		return serverResponse;
 	}
@@ -307,21 +308,10 @@ public class Server extends LeaderBehaviour implements Serializable, FollowerBeh
 
 
 
-
-
-	public static void main(String[] args) throws RemoteException, MalformedURLException {
-		Naming.rebind("rmi://" + "127.0.0.1" + ":"+ 1000 + "/server", new Server());
-	}
-
-
-
-
-
-
 	@Override
 	public ServerResponse requestLeader(String command) throws RemoteException {
 		// TODO Auto-generated method stub
 		ServerResponse serverResponse = new ServerResponse(null, "sou o lider, recebi " + command + " respondi ao cliente com test123");
 		return serverResponse;	
-		}
+	}
 }

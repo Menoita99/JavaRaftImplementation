@@ -6,20 +6,8 @@ import java.rmi.RemoteException;
 import com.raft.models.Address;
 import com.raft.models.ServerResponse;
 import com.raft.models.VoteResponse;
-import com.raft.state.LeaderState;
 
-import lombok.Getter;
-import lombok.Setter;
-
-/**
- * Class that represents the Leader Behaviour. 
- * This class also has the leader State object
- * @author RuiMenoita
- */
-@Getter
-@Setter
-public abstract class LeaderBehaviour implements Remote{
-	private LeaderState leaderState;
+public interface LeaderBehaviour extends Remote {
 	
 	/**
 	 * Invoked by candidates to gather votes 
@@ -30,7 +18,7 @@ public abstract class LeaderBehaviour implements Remote{
 	 * @return VoteResponse
 	 * @throws RemoteException extends Remote Interface
 	 */
-	public abstract VoteResponse requestVote(long term,Address candidateId, long lastLogIndex, long lastLogTerm) throws RemoteException;
+	public VoteResponse requestVote(long term,Address candidateId, long lastLogIndex, long lastLogTerm) throws RemoteException;
 
 	
 	/**
@@ -40,5 +28,5 @@ public abstract class LeaderBehaviour implements Remote{
 	 * @return ServerResponse
 	 * @throws RemoteException extends Remote Interface
 	 */
-	public abstract ServerResponse request(String command) throws RemoteException;
+	public ServerResponse request(String command) throws RemoteException;
 }

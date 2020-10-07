@@ -8,6 +8,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.Properties;
 
+import com.raft.LeaderBehaviour;
 import com.raft.Server;
 import com.raft.models.ServerResponse;
 
@@ -24,7 +25,7 @@ public class Client {
 	private String clusterMembers ;
 	private int tryCount = -1;
 	private String clusterMembersVector[];
-	private Server look_up;
+	private LeaderBehaviour look_up;
 	public Client() {
 		readIni();
 		connectToServer();
@@ -64,7 +65,7 @@ public class Client {
 
 		try {
 
-			look_up = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
+			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + ip + ":" + port + "/server");
 
 			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
 			// If the Object of the ServerResponse instance is null, that means it received
