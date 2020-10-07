@@ -273,7 +273,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		switch (mode) {
 		case FOLLOWER: {
-			return requestLeader();
+			return leaderResponse(null);
 		}
 		case CANDIDATE:{
 			//TODO
@@ -296,10 +296,13 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @return ServerResponse
 	 */
 	private ServerResponse leaderResponse(String string) {
-		//TODO
-		System.out.println("received "+string);
-		//dar add ao comando (por decidir)
-		ServerResponse serverResponse = new ServerResponse(null,  string + ";test123");
+		ServerResponse serverResponse;
+		if(string==null)
+		 serverResponse = new ServerResponse(leaderId,  null);
+		else {
+			 serverResponse = new ServerResponse(leaderId,  string);
+
+		}
 		return serverResponse;
 	}
 
@@ -332,14 +335,4 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	}
 
 
-
-
-
-
-	@Override
-	public ServerResponse requestLeader() throws RemoteException {
-		// TODO Auto-generated method stub
-		ServerResponse serverResponse = new ServerResponse(leaderId,"not today");
-		return serverResponse;	
-	}
 }

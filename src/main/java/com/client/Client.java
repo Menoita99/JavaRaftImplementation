@@ -33,6 +33,22 @@ public class Client {
 	public Client() {
 		readIni();
 		connectToServer();
+		spamCommands();
+	}
+
+
+	private void spamCommands() {
+		while (true) {
+			try {
+				Thread.sleep(2000);
+				ServerResponse response = look_up.request(generateFullLog("abcdtest"));
+				System.out.println(response);
+			} catch (RemoteException | InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		}		
 	}
 
 
@@ -70,7 +86,7 @@ public class Client {
 	public void connectToServer() {
 		if(tryCount==clusterMembersVector.length-1)
 			return;
-		
+
 		//Suggestion use a for loop instead of a recursive method
 		tryCount++;
 		String ip = clusterMembersVector[tryCount].split(":")[0];
@@ -84,17 +100,16 @@ public class Client {
 			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
 			// If the Object of the ServerResponse instance is null, that means it received
 			// the Address of the leader. Try reconnect to leader
-			System.out.println(response.toString());
-			System.out.println(response.getLeader());
 			if (response.getResponse()==null) {
+				System.out.println("Follower answer:"+response);
 				ip = response.getLeader().getIpAddress();
 				port = String.valueOf(response.getLeader().getPort());
-				//look_up = (Server) Naming.lookup("rmi://" + ip + ":" + port + "/server");
+				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + ip + ":" + port + "/server");
+				response = look_up.request(logsList.get(0));
+				System.out.println("Follower answer:"+response);
 
-				//response = look_up.request(generateFullLog("abcdtest"));
 			}
-
-
+			logsList.clear();
 		} catch (NotBoundException | MalformedURLException | RemoteException e) {
 			System.out.println("This cluster member is offline");
 			connectToServer();
