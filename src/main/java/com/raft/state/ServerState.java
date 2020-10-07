@@ -18,6 +18,11 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * This class represents volatile and non-volatile server state
+ * @author RuiMenoita
+ *
+ */
 @Data
 public class ServerState implements Serializable{
 	private static final long serialVersionUID = 1L;
@@ -44,7 +49,20 @@ public class ServerState implements Serializable{
 	private long lastApplied = 0;
 
 
+	
 	public ServerState() throws IOException {
+		init(); 
+	}
+
+
+
+
+	/**
+	 * Reads configuration files and start object attributes
+	 * @throws IOException
+	 * @throws FileNotFoundException
+	 */
+	private void init() throws IOException, FileNotFoundException {
 		stateProperties = new Properties();
 		new File(STATE_FILE).createNewFile();
 		stateProperties.load(new FileInputStream(STATE_FILE));
@@ -53,13 +71,15 @@ public class ServerState implements Serializable{
 		
 		File logFile = new File(LOG_FILE);
 		logFile.createNewFile();
-		logWriter = new PrintWriter(logFile); 
+		logWriter = new PrintWriter(logFile);
 	}
 
 
 
-
-
+	
+	/**
+	 * Set and store's in the hard drive the current term
+	 */
 	public void setCurrentTerm(long currentTerm) {
 		try {
 			this.currentTerm = currentTerm;
@@ -73,7 +93,9 @@ public class ServerState implements Serializable{
 
 
 
-
+	/**
+	 * Set and store's in the hard drive the last voted for server
+	 */
 	public void setVotedFor(Address votedFor) {
 		try {
 			this.votedFor = votedFor;
@@ -88,7 +110,9 @@ public class ServerState implements Serializable{
 
 
 
-
+	/**
+	 * Appends a new entry in the logs file and set's last log 
+	 */
 	public void appendLog(Log log) {
 		lastLog = log;
 		if(currentTerm != log.getTerm())
@@ -100,6 +124,12 @@ public class ServerState implements Serializable{
 
 
 
+	/**
+	 * Verifies if a certain log with term and index given was already been stored
+	 * @param term certain log term
+	 * @param index certain log term
+	 * @return true if there is this log in memorr or false otherwise
+	 */
 	public boolean hasLog(long term, long index) {
 		if(term==lastLog.getTerm() && index==lastLog.getIndex()) 
 			return true;
@@ -123,6 +153,10 @@ public class ServerState implements Serializable{
 
 
 
+	/**
+	 * Overrides the given log in memory
+	 * @param log log to be written
+	 */
 	public void override(Log log) {
 		try {
 			File temp = File.createTempFile("temp", ".tmp");

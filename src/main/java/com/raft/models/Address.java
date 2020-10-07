@@ -10,12 +10,25 @@ import java.net.URL;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+/**
+ * Class that represents the the IP and port of a Server.
+ * This class is also the server id
+ * @author RuiMenoita
+ *
+ */
 @Data
 @AllArgsConstructor
 public class Address {
-	private String ipAddress;
-	private int port;
+	private String ipAddress; //IP address
+	private int port;		  //port
 
+	
+	/**
+	 * Parses the given string into Address object
+	 * String format : //TODO
+	 * @param s string to be parsed
+	 * @return returns the Address parsed or null if it could not parse the given string
+	 */
 	public static Address parse(String s) {
 		if(s == null || s.isBlank())
 			return null;
@@ -24,7 +37,12 @@ public class Address {
 	}
 
 	
-
+	
+	
+	
+	/**
+	 * @return returns local network IP
+	 */
 	public static String getLocalIp() {
 		Socket socket = null;
 		try{
@@ -45,6 +63,9 @@ public class Address {
 
 	
 	
+	/**
+	 * @return returns public network IP
+	 */
 	public static String getPublicIp() {
 		try {
 			URL whatismyip = new URL("http://checkip.amazonaws.com");
@@ -53,17 +74,4 @@ public class Address {
 		} catch (IOException e) {e.printStackTrace();}
 		return null;
 	}
-
-
-	public String getIpAddress() {
-		return ipAddress;
-	}
-
-
-	public int getPort() {
-		return port;
-	}
-	
-	
-	
 }

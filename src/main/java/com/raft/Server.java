@@ -33,7 +33,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class Server extends LeaderBehavior implements Serializable, FollowerBehavior{
+public class Server extends LeaderBehaviour implements Serializable, FollowerBehaviour{
 
 	private static final long serialVersionUID = 1L;
 
@@ -79,7 +79,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 	/**
-	 * Reads configuration file and initializes attributes
+	 * Reads configuration file and initialises attributes
 	 */
 	private void readIni() throws  IOException, AlreadyBoundException {
 		Properties p = new Properties();
@@ -104,7 +104,13 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	
 	/**
-	 * Method used by Candidates to request votes
+	 * Invoked by candidates to gather votes 
+	 * @param term candidate’s term
+	 * @param candidateId candidate requesting vote
+	 * @param lastLogIndex index of candidate’s last log entry
+	 * @param lastLogTerm term of candidate’s last log entry
+	 * @return VoteResponse
+	 * @throws RemoteException extends Remote Interface
 	 */
 	@Override
 	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
@@ -130,7 +136,15 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	
 	/**
-	 * Method called by leader to replicate log entries and also used as heartbeat
+	 * Method Invoked by leader to replicate log entries; also used as heartbeat 
+	 * @param term leader’s term
+	 * @param leaderId so follower can redirect clients
+	 * @param prevLogIndex index of log entry immediately preceding new ones
+	 * @param prevLogTerm term of prevLogIndex entry
+	 * @param entries log entries to store (empty for heartbeat; may send more than one for efficiency)
+	 * @param leaderCommit leader’s commitIndex
+	 * @return AppendResponse
+	 * @throws RemoteException extends Remote Interface
 	 */
 	@Override
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Log> entries, long leaderCommit) throws RemoteException {
@@ -144,7 +158,7 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 		else if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
-
+			
 			for (Log log : entries) {
 				Log lastLog = state.getLastLog();
 				if((log.getIndex() == lastLog.getIndex() && log.getTerm() != lastLog.getTerm()) || log.getIndex()<lastLog.getIndex())
@@ -215,10 +229,12 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 	
 	/**
-	 * RPC called by the client to execute a certain command
+	 * Method invoked by client to request the execution of the given command
 	 * if current server is a follower it returns an empty response only containing leader's address
 	 * if current server is a candidate //TODO
 	 * if current server is a leader it executes {@link leaderResponse}
+	 * @param command command given by client to be executed
+	 * @return ServerResponse
 	 */
 	@Override
 	public ServerResponse request(String string) throws RemoteException{
@@ -262,8 +278,21 @@ public class Server extends LeaderBehavior implements Serializable, FollowerBeha
 
 
 
+	/*
+	 *This method may chance it's parameters since using Java RMI we don't  need chunks and data because Java RMI handles
+	 *low level connection issues for us 
+	 */
 	/**
-	 * Method called by leader to compress log
+	 * Method Invoked by leader to send chunks of a snapshot to a follower. Leaders always send chunks in order.
+	 * @param term leader’s term
+	 * @param leaderId so follower can redirect clients
+	 * @param lastIncludedIndex the snapshot replaces all entries up through and including this index
+	 * @param lastIncludedTerm term of lastIncludedIndex
+	 * @param offset byte offset where chunk is positioned in the snapshot file
+	 * @param data raw bytes of the snapshot chunk, starting at offset
+	 * @param done true if this is the last chunk
+	 * @return currentTerm, for leader to update itself
+	 * @throws RemoteException extends Remote Interface
 	 */
 	@Override
 	public long InstallSnapshot(long term, Address leaderId, long lastIncludedIndex, long lastIncludedTerm, long offset,byte[] data, boolean done) {
