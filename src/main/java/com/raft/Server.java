@@ -57,6 +57,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private Timer timer = new Timer();
 
 	private Address leaderId;
+	
+	private Address selfId;
 
 
 
@@ -206,11 +208,27 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * Method called by Timer when an election must be started
 	 */
 	public void startElection() {
-		// TODO Auto-generated method stub
+		long currTerm = this.state.getCurrentTerm();
 		if(mode == Mode.FOLLOWER) {
 			System.out.println("Starting Election");
+			//Increments its current term
+			currTerm++;
+			//Transitions to the candidate state
+			mode = Mode.CANDIDATE;
+			//Votes for itself 
+			this.state.setVotedFor(this.selfId);
+			//Send RequestVote to every other Server
+			for(Server clstr : cluster) {
+				try {
+					clstr.requestVote(currTerm, selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm());
+				} catch (RemoteException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
+
+
 
 
 
