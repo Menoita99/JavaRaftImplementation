@@ -20,3 +20,11 @@ target/classes/META-INF/MANIFEST.MF
 target/classes/META-INF/maven/Raft/Raft/pom.xml
 .classpath
 src/main/resources/state.conf
+target/classes/com/raft/Server.class
+target/classes/META-INF/maven/Raft/Raft/pom.xml
+target/classes/META-INF/maven/Raft/Raft/pom.properties
+target/classes/META-INF/MANIFEST.MF
+target/classes/com/raft/Server$1.class
+target/classes/com/client/Client.class
+src/main/resources/state.conf
+.classpath
