@@ -1,13 +1,12 @@
 package com.test;
 
-import java.net.MalformedURLException;
+import java.io.IOException;
 import java.rmi.AlreadyBoundException;
-import java.rmi.RemoteException;
 
 import com.raft.Server;
 
 public class ServerTest {
-	public static void main(String[] args) throws RemoteException, MalformedURLException, AlreadyBoundException{
+	public static void main(String[] args) throws AlreadyBoundException, IOException{
 		new Server();
 	}
 }

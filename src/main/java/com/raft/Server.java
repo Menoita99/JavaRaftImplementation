@@ -1,11 +1,13 @@
 package com.raft;
 
-import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.MalformedURLException;
+import java.rmi.AccessException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.Naming;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -39,6 +41,9 @@ import lombok.Setter;
 @Setter
 public class Server extends Leader implements Serializable, FollowerBehaviour{
 
+	public static final int WAIT_FOR_RESPONSE_TIME_OUT = 250;
+	public static final int HEARTBEAT_TIME_OUT = 100;
+
 	private static final long serialVersionUID = 1L;
 
 	private ExecutorService  executor;
@@ -52,7 +57,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private int minTimeOut;
 
 	//Reference to the cluster servers to make RPC (remote procedure call)
-	private LinkedList<Server> cluster = new LinkedList<>();
+	private ArrayList<FollowerBehaviour> clusterFollow = new ArrayList<>();
+	private ArrayList<LeaderBehaviour> clusterLeader = new ArrayList<>();
+
+	private HeartBeatSender heartBeatSender;
 
 	//This object will notify server when it must change mode to candidate and start an election
 	private Timer timer = new Timer();
@@ -60,44 +68,27 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private Address leaderId;
 	private Address selfId;
 
+	private Address[] clusterArray;
 
 
-	public Server(){
-		try {
-			this.state = new ServerState();
-			readIni();
-		} catch (IOException | AlreadyBoundException e) {
-			e.printStackTrace();
-		}
-		//load configurations (config.conf)
-		/*
-		 * Using BufferedReaders we can check for the file checkpoint.bat?
-		 
-		try {
-			FileInputStream fis = new FileInputStream("src/main/resources/checkpoint.bat");
-			BufferedInputStream bis = new BufferedInputStream(fis);
-			//read entries one by one
-			//placeholder for now
-			//TODO
-			bis.readAllBytes();
-			
-			
-			
-			bis.close();
-			fis.close();
-		}catch (Exception e) {
-			e.printStackTrace();
-		}
-		*/
-		//check for checkpoint
-		//load rmi registry;
+
+
+
+
+	public Server() throws IOException, AlreadyBoundException{
+		state = new ServerState();
+		readIni();
+		registServer();
+		heartBeatSender = new HeartBeatSender(this);
+		heartBeatSender.start();
+		restartTimer();
 	}
 
 
 
 
-	//temp para testar, alterar depois o port abaixo 87: int port = .... e apagar l79
-	private int port;
+
+
 	/**
 	 * Reads configuration file and initialises attributes
 	 */
@@ -105,32 +96,67 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		Properties p = new Properties();
 		p.load(new FileInputStream("src/main/resources/config.ini"));
 
-		port = Integer.parseInt(p.getProperty("port"));
-		String clusterString = p.getProperty("cluster");
-		executor = Executors.newFixedThreadPool(clusterString.split(";").length);
+		selfId = new Address(p.getProperty("ip"), Integer.parseInt(p.getProperty("port")));
+		System.out.println(selfId);
+
+		String[] clusterString = p.getProperty("cluster").split(";");
+		clusterArray = new Address[clusterString.length];
+		for (int i = 0; i < clusterString.length; i++) {
+			String[] splited = clusterString[i].split(";");
+			clusterArray[i] = new Address(splited[0], Integer.parseInt(splited[1]));
+		}
+
+		executor = Executors.newFixedThreadPool(clusterArray.length);
 
 		String[] timeOutInterval = p.getProperty("timeOutInterval").trim().split(",");
 		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
-		System.out.println("Server "+p.getProperty("ip")+":"+port);
 
 		leaderId = new Address(p.getProperty("liderIp"), Integer.parseInt(p.getProperty("liderPort")));
-		System.out.println(leaderId);
-
-		String ip = p.getProperty("ip");
-		System.out.println("Server "+ip+":"+port);
-		
-		leaderId = new Address(p.getProperty("liderIp"), Integer.parseInt(p.getProperty("liderPort")));
-		System.out.println(leaderId);
-		
-		selfId = new Address(ip, port);
-		
-		Registry registry = LocateRegistry.createRegistry(port);
-		LeaderBehaviour object = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
-		registry.bind("rmi://"+ip+":"+port+"/server", object);
-		Naming.rebind("rmi://"+ip+":"+port+"/server", object);
-		restartTimer();
 	}
+
+
+
+
+
+	/**
+	 * Makes server Online
+	 * @throws RemoteException
+	 * @throws AlreadyBoundException
+	 * @throws AccessException
+	 * @throws MalformedURLException
+	 */
+	private void registServer() throws RemoteException, AlreadyBoundException, AccessException, MalformedURLException {
+		Registry registry = LocateRegistry.createRegistry(selfId.getPort());
+		LeaderBehaviour leader = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
+		FollowerBehaviour follow = (FollowerBehaviour) UnicastRemoteObject.exportObject(this, 0);
+		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", leader);
+		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", leader);
+		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/follow", follow);
+		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/follow", follow);
+		tryToConnect();
+	}
+
+
+
+
+
+	/**
+	 * Looks for another servers
+	 */
+	private void tryToConnect() {
+		for (int i = 0; i < clusterArray.length; i++) {
+			try {
+				if(clusterFollow.get(i) == null || clusterFollow.size() < i )
+					clusterFollow.add((FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow"));
+				if(clusterLeader.get(i) == null || clusterLeader.size() < i )
+					clusterLeader.add((LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
+			} catch (MalformedURLException | RemoteException | NotBoundException e) {
+				continue;
+			}
+		}
+	}
+
 
 
 
@@ -181,14 +207,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	@Override
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Log> entries, long leaderCommit) throws RemoteException {
+		restartTimer();
 		this.leaderId = leaderId;
 		shouldBecameFollower(term);
+		
+		//	boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
+		boolean hasPreviousLog = prevLogIndex == state.getLastLog().getIndex() && prevLogTerm == state.getLastLog().getTerm();
 
-		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
-
-		if(entries.isEmpty())//heartBeat
-			restartTimer();
-		else if(hasPreviousLog){
+		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 
@@ -233,44 +259,43 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * Method called by Timer when an election must be started
 	 */
 	public void startElection() {
-		long currTerm = this.state.getCurrentTerm();
 		if(mode == Mode.FOLLOWER || mode == Mode.CANDIDATE) {
 			System.out.println("Starting Election");
+
+			//Transition to candidate state
 			ArrayList<Future<VoteResponse>> listFuture = new ArrayList<>();
-			this.state.setCurrentTerm(this.state.getCurrentTerm() +1);
-			//Transitions to the candidate state
 			mode = Mode.CANDIDATE;
-			//Votes for itself 
+			this.state.setCurrentTerm(this.state.getCurrentTerm() +1);
 			this.state.setVotedFor(this.selfId);
+			restartTimer();
+
 			//Send RequestVote to every other Server
-			for(Server clstr : cluster) {
-				//clstr.requestVote(currTerm, selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm());
-				//futuros
-				Future<VoteResponse> resp = executor.submit(()-> {
-					return clstr.requestVote(this.state.getCurrentTerm()
-							, selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm());
-				});
+			for(LeaderBehaviour clstr : clusterLeader) {
+				Future<VoteResponse> resp = executor.submit(()-> clstr.requestVote(this.state.getCurrentTerm(), selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm()));
 				listFuture.add(resp);
 			}
 			int votes = 0;
-			
-			for(Future<VoteResponse> ftr : listFuture) {
-					try {
-						VoteResponse vote = ftr.get(500, TimeUnit.MILLISECONDS);
-						if(vote.isVoteGranted())
-							votes++;								
-					} catch (InterruptedException | ExecutionException | TimeoutException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-				if (votes > cluster.size()/2)
-					mode = Mode.LEADER;
-				else if((double) votes / (double)cluster.size() == 0.5) {
-					startElection();
+
+			for(Future<VoteResponse> ftr : listFuture){
+				try {
+					VoteResponse vote = ftr.get(WAIT_FOR_RESPONSE_TIME_OUT, TimeUnit.MILLISECONDS);
+					if(vote.isVoteGranted())
+						votes++;								
+				} catch (InterruptedException | ExecutionException | TimeoutException e) {
+					e.printStackTrace();
+					continue;
 				}
 			}	
+
+			if (votes > clusterArray.length/2) {
+				mode = Mode.LEADER;
+				leaderId = selfId;
+				heartBeatSender.notifyLeader();
+				restartTimer();
+			}else if((double) votes / (double) clusterArray.length == 0.5) {
+				startElection();
+			}
 		}
-			
 	}
 
 
@@ -288,7 +313,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		timer = new Timer();
 		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
 		timer.schedule(new TimerTask() {
-			public void run() {System.out.println("Start Election in "+timeOut+"ms");startElection();}
+			public void run() {
+				System.out.println("Start Election in "+timeOut+"ms");
+				//startElection();
+			}
 		}, timeOut);
 	}
 
@@ -307,9 +335,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	@Override
 	public ServerResponse request(String string) throws RemoteException{
-
 		//TEMP
-		if(port == 1000)
+		if(selfId.getPort() == 1000)
 			this.mode=Mode.LEADER;
 		else {
 			this.mode=Mode.FOLLOWER;
@@ -318,7 +345,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		switch (mode) {
 		case FOLLOWER: {
-			return leaderResponse(null);
+			return new ServerResponse(leaderId, null);
 		}
 		case CANDIDATE:{
 			//TODO
@@ -346,13 +373,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			serverResponse = new ServerResponse(leaderId,  null);
 		else {
 			serverResponse = new ServerResponse(leaderId,  command);
-		}
-		//This line executes the command
-		try {
-			serverResponse.setResponse(state.getInterpreter().execute(command));
-		}catch (Exception e) {
-			serverResponse.setResponse(e);
-			e.printStackTrace();
+			try {
+				serverResponse.setResponse(state.getInterpreter().execute(command));
+			}catch (Exception e) {
+				serverResponse.setResponse(e);
+				e.printStackTrace();
+			}
+			//TODO create a log object and pass it to this method
+			sendAppendEntriesRequest(null);
 		}
 		return serverResponse;
 	}
@@ -383,5 +411,21 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		shouldBecameFollower(term);
 		// TODO Auto-generated method stub
 		return 0;
+	}
+
+
+
+
+
+
+	public void sendAppendEntriesRequest(Log entry) {
+		if(mode == Mode.LEADER) {
+			tryToConnect();
+			List<Future<AppendResponse>> futures = new LinkedList<>();
+			for (FollowerBehaviour server : clusterFollow) {
+//				futures.add(executor.submit(()->server.appendEntries(state.getCurrentTerm(), selfId, prevLogIndex, prevLogTerm, entries, leaderCommit)));
+				//TODO
+			}
+		}
 	}
 }

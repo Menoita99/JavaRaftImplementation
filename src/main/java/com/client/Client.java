@@ -44,24 +44,10 @@ public class Client {
 	public Client() {
 		readIni();
 		connectToServer();
-		spamCommands();
 	}
 
-
-	private void spamCommands() {
-//		while (true) {
-//			try {
-//				Thread.sleep(2000);
-//				ServerResponse response = look_up.request(generateFullLog("abcdtest"));
-//				System.out.println(response);
-//			} catch (RemoteException | InterruptedException e) {
-//				// TODO Auto-generated catch block
-//				e.printStackTrace();
-//			}
-//
-//		}		
-	}
-
+	
+	
 
 	private void readIni() {
 		logsList = new ArrayList<>();
@@ -106,7 +92,7 @@ public class Client {
 
 		try {
 
-			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/server");
+			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
 
 			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
 			// If the Object of the ServerResponse instance is null, that means it received
@@ -114,7 +100,7 @@ public class Client {
 			if (response.getResponse()==null) {
 				leaderIp.set(response.getLeader().getIpAddress());
 				leaderPort.set(String.valueOf(response.getLeader().getPort()));
-				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/server");
+				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
 				response = look_up.request(logsList.get(0));
 				System.out.println("Follower answer:"+response);
 
