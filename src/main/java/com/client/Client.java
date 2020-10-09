@@ -30,7 +30,7 @@ public class Client {
 	 * cada comando do cliente tem o mesmo id
 	 **/
 	private Address address;
-	
+
 	private String clusterMembers ;
 	private int tryCount = -1;
 	private String clusterMembersVector[];
@@ -38,17 +38,17 @@ public class Client {
 
 	private SimpleStringProperty leaderPort;
 	private SimpleStringProperty leaderIp;
-	
-	
-	
+
+
+
 	private ArrayList<String> logsList;
 	public Client() {
 		readIni();
 		connectToServer();
 	}
 
-	
-	
+
+
 
 	private void readIni() {
 		logsList = new ArrayList<>();
@@ -116,15 +116,21 @@ public class Client {
 
 
 	public ServerResponse executeCommand(String command) throws RemoteException {
-		ServerResponse to_return;
-		try {
-			to_return = look_up.request(command);
-		} catch (RemoteException e) {
-			connectToServer();
-			return executeCommand(command);
+		ServerResponse to_return = null;
+		//3 tries
+		for (int i = 0; i < 3; i++) {
+			try {
+				to_return = look_up.request(command);
+			} catch (RemoteException | NullPointerException e) {
+				e.printStackTrace();
+				connectToServer();
+			}
 		}
-		
+		if(to_return == null) {
+			ClientController.getInstance().showErrorDialog("Failed to connect","Could not connect to leader. Please check your internet connection");
+			throw new  IllegalStateException("Unable to connect");
+		}
 		return to_return;
 	}
-	
+
 }
