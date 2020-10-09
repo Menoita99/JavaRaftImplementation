@@ -37,10 +37,11 @@ public class ClientController extends Application implements Initializable{
     @FXML private TextField textField;
 
     private Client client;
-
+    private static ClientController instance;
 	
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
+		instance = this;
 		client = new Client();
 		ipClient.setText(client.getAddress().getIpAddress());
 		portClient.setText(client.getAddress().getPort()+"");
@@ -108,7 +109,46 @@ public class ClientController extends Application implements Initializable{
 		alert.showAndWait();
 	}
 	
+	/**
+	 * Display's an error dialog with the title and message given
+	 * @param title dialog title
+	 * @param Message dialog message
+	 */
+	public void showErrorDialog(String title,String Message) {
+		Alert alert = new Alert(AlertType.ERROR);
+		alert.setTitle(title);
+		alert.setHeaderText(null);
+		alert.setContentText(Message);
+		alert.showAndWait();
+	}
+
+
+
+
+
+	/**
+	 * Display's an information dialog with the title and message given
+	 * @param title dialog title
+	 * @param Message dialog message
+	 */
+	public void showInfoDialog(String title,String Message) {
+		Alert alert = new Alert(AlertType.INFORMATION);
+		alert.setTitle(title);
+		alert.setHeaderText(null);
+		alert.setContentText(Message);
+		alert.showAndWait();
+	}
+	
+	
 	public static void main(String[] args) {
 		launch(args);
+	}
+
+
+	/**
+	 * @return the instance
+	 */
+	public static ClientController getInstance() {
+		return instance;
 	}
 }
