@@ -10,6 +10,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.Properties;
+import java.util.Random;
 
 import com.raft.LeaderBehaviour;
 import com.raft.models.Address;
@@ -44,22 +45,6 @@ public class Client {
 	public Client() {
 		readIni();
 		connectToServer();
-		spamCommands();
-	}
-
-
-	private void spamCommands() {
-//		while (true) {
-//			try {
-//				Thread.sleep(2000);
-//				ServerResponse response = look_up.request(generateFullLog("abcdtest"));
-//				System.out.println(response);
-//			} catch (RemoteException | InterruptedException e) {
-//				// TODO Auto-generated catch block
-//				e.printStackTrace();
-//			}
-//
-//		}		
 	}
 
 
@@ -69,7 +54,8 @@ public class Client {
 			Properties p = new Properties();
 			p.load(new FileInputStream("src/main/resources/config.ini"));
 			clusterMembers = p.getProperty("cluster");
-			address = new Address(p.getProperty("ip"), Integer.parseInt(p.getProperty("port")));
+			Random random = new Random();
+			address = new Address(p.getProperty("ip"), random.nextInt(10000) + 1010);
 
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -108,7 +94,7 @@ public class Client {
 
 			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/server");
 
-			ServerResponse response = look_up.request(generateFullLog("abcdtest"));
+			ServerResponse response = look_up.request(generateFullLog("try_connection"));
 			// If the Object of the ServerResponse instance is null, that means it received
 			// the Address of the leader. Try reconnect to leader
 			if (response.getResponse()==null) {
@@ -128,8 +114,15 @@ public class Client {
 
 
 	public ServerResponse executeCommand(String command) throws RemoteException {
-		//TODO do here client logic
-		return look_up.request(command);
+		ServerResponse to_return;
+		try {
+			to_return = look_up.request(command);
+		} catch (RemoteException e) {
+			connectToServer();
+			return executeCommand(command);
+		}
+		
+		return to_return;
 	}
 	
 }
