@@ -110,18 +110,18 @@ public class Client {
 		try {
 
 			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-			ServerResponse response = look_up.execute(generateFullLog("try_connection"), generateCommandID(clientID));
+//			ServerResponse response = look_up.execute(generateFullLog("try_connection"), generateCommandID(clientID));
 			
 			// If the Object of the ServerResponse instance is null, that means it received
 			// the Address of the leader. Try reconnect to leader
-			if (response.getResponse()==null) {
-				leaderIp.set(response.getLeader().getIpAddress());
-				leaderPort.set(String.valueOf(response.getLeader().getPort()));
-				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-				response = look_up.execute(logsList.get(0), generateCommandID(clientID));
-				System.out.println("Follower answer:"+response);
-
-			}
+//			if (response.getResponse()==null) {
+//				leaderIp.set(response.getLeader().getIpAddress());
+//				leaderPort.set(String.valueOf(response.getLeader().getPort()));
+//				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
+//				response = look_up.execute(logsList.get(0), generateCommandID(clientID));
+//				System.out.println("Follower answer:"+response);
+//
+//			}
 			logsList.clear();
 			
 		} catch (NotBoundException | MalformedURLException | RemoteException e) {
