@@ -101,7 +101,7 @@ public class ServerState implements Serializable{
 	public void setVotedFor(Address votedFor) {
 		try {
 			this.votedFor = votedFor;
-			stateProperties.setProperty("votedFor", votedFor+"");
+			stateProperties.setProperty("votedFor", votedFor.toFileString());
 			stateProperties.store(new FileOutputStream(STATE_FILE), null);
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -119,7 +119,7 @@ public class ServerState implements Serializable{
 		lastLog = log;
 		if(currentTerm != log.getTerm())
 			setCurrentTerm(log.getTerm());
-		logWriter.println(log);
+		logWriter.println(log.toFileString());
 	}
 
 

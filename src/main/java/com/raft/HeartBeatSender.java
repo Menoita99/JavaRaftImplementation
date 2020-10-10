@@ -41,7 +41,7 @@ public class HeartBeatSender extends Thread {
 	
 	
 	
-	public synchronized void notifyLeader() {
+	public synchronized void goOn() {
 		notifyAll();
 	}
 	

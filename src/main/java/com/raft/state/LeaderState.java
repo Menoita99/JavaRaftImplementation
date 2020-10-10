@@ -3,6 +3,7 @@ package com.raft.state;
 import java.io.Serializable;
 import java.util.HashMap;
 
+import com.raft.Server;
 import com.raft.models.Address;
 
 import lombok.Data;
@@ -22,8 +23,13 @@ public class LeaderState implements Serializable{
 	/**
 	 * Resents current state
 	 */
-	public void reset() {
+	public void reset(Server s) {
 		nextIndex.clear();
 		matchIndex.clear();
+		Address[] servers = s.getClusterArray();
+		for (int i = 0; i < servers.length; i++) {
+			nextIndex.put(servers[i], s.getState().getLastLog().getIndex()+1);
+			nextIndex.put(servers[i], 0L);
+		}
 	}
 }

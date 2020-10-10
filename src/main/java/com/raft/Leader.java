@@ -13,5 +13,5 @@ import lombok.Setter;
 @Getter
 @Setter
 public abstract class Leader implements LeaderBehaviour{
-	private LeaderState leaderState;
+	private LeaderState leaderState = new LeaderState();
 }

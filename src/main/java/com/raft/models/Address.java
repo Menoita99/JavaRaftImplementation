@@ -76,4 +76,14 @@ public class Address implements Serializable{
 		} catch (IOException e) {e.printStackTrace();}
 		return null;
 	}
+	
+	
+	
+	public static String toFileString(Address a) {
+		return a.getIpAddress()+";"+a.getPort();
+	}
+	
+	public String toFileString() {
+		return this.getIpAddress()+";"+this.getPort();
+	}
 }

@@ -28,5 +28,5 @@ public interface LeaderBehaviour extends Remote {
 	 * @return ServerResponse
 	 * @throws RemoteException extends Remote Interface
 	 */
-	public ServerResponse request(String command) throws RemoteException;
+	public ServerResponse execute(String command) throws RemoteException;
 }
