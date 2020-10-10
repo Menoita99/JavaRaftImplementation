@@ -18,6 +18,7 @@ import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * This class represents volatile and non-volatile server state
@@ -53,6 +54,7 @@ public class ServerState implements Serializable{
 
 	private Interpreter interpreter = new Interpreter();
 
+	private ReentrantLock lock = new ReentrantLock();
 	
 	public ServerState() throws IOException {
 		int r = (int)(Math.random()*100);
@@ -183,5 +185,4 @@ public class ServerState implements Serializable{
 			e.printStackTrace();
 		}
 	}
-	
 }

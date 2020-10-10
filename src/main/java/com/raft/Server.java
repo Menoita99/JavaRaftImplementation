@@ -118,7 +118,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			clusterLeader.add(null);
 			clusterFollow.add(null);
 		}
-		
+
 		for (int i = 0; i < clusterString.length; i++) {
 			String[] splited = clusterString[i].split(":");
 			clusterArray[i] = new Address(splited[0], Integer.parseInt(splited[1]));
@@ -233,7 +233,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
-//			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
+			//			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 
 			for (Log log : entries) {
 				Log lastLog = state.getLastLog();
@@ -439,56 +439,61 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 	public boolean sendAppendEntriesRequest(Log entry) {
-		if(mode == Mode.LEADER) {
-			tryToConnect();
-			long term = state.getCurrentTerm();
-			long prevLogIndex = state.getLastLog().getIndex();
-			long prevLogTerm = state.getLastLog().getTerm();
-			long leaderCommit = state.getCommitIndex();
+		try {
+			if(mode == Mode.LEADER) {
+				state.getLock().lock();
+				tryToConnect();
+				long term = state.getCurrentTerm();
+				long prevLogIndex = state.getLastLog().getIndex();
+				long prevLogTerm = state.getLastLog().getTerm();
+				long leaderCommit = state.getCommitIndex();
 
-			List<Future<AppendResponse>> futures = new ArrayList<>(clusterFollow.size());
-			for (int i = 0; i < clusterFollow.size(); i++) {
-				FollowerBehaviour follower = clusterFollow.get(i);
-				if(follower != null)
-					futures.add(i,executor.submit(()->follower.appendEntries(term, selfId, prevLogIndex, prevLogTerm, List.of(entry), leaderCommit)));
-			}
-
-			List<AppendResponse> responses = new ArrayList<>(clusterFollow.size());
-			for (int i = 0; i < futures.size(); i++) {
-				try {
-					Future<AppendResponse> future = futures.get(i);
-					if(future != null)
-						responses.add(i,future.get(WAIT_FOR_RESPONSE_TIME_OUT, TimeUnit.MILLISECONDS));
-				} catch (InterruptedException | ExecutionException e) {
-					e.printStackTrace();
-				} catch (TimeoutException e) {
-					//TODO
-					if(entry != null)
-						System.out.println("TODO RETRY UNTIL IT WORK");
+				List<Future<AppendResponse>> futures = new ArrayList<>(clusterFollow.size());
+				for (int i = 0; i < clusterFollow.size(); i++) {
+					FollowerBehaviour follower = clusterFollow.get(i);
+					if(follower != null)
+						futures.add(i,executor.submit(()->follower.appendEntries(term, selfId, prevLogIndex, prevLogTerm, List.of(entry), leaderCommit)));
 				}
-			}
 
-			int commited = 0;
-			for (int i = 0; i < responses.size(); i++) {
-				AppendResponse response = responses.get(i);
-				if(response != null) {
-					long appendedIndex = getLeaderState().getNextIndex().get(clusterArray[i]);
-					if(response.isSuccess()) {
-						getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex+1);
-						getLeaderState().getMatchIndex().put(clusterArray[i], appendedIndex);
-						commited++;
-					}else {
-						getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex-1 < 0 ? 0 : appendedIndex-1);
+				List<AppendResponse> responses = new ArrayList<>(clusterFollow.size());
+				for (int i = 0; i < futures.size(); i++) {
+					try {
+						Future<AppendResponse> future = futures.get(i);
+						if(future != null)
+							responses.add(i,future.get(WAIT_FOR_RESPONSE_TIME_OUT, TimeUnit.MILLISECONDS));
+					} catch (InterruptedException | ExecutionException e) {
+						e.printStackTrace();
+					} catch (TimeoutException e) {
+						//TODO
+						if(entry != null)
+							System.out.println("TODO RETRY UNTIL IT WORK");
 					}
 				}
-			}
 
-			if (commited > clusterArray.length/2 && entry != null) {
-				state.setCommitIndex(entry.getIndex());
-//				state.appendLog(entry);
-				return true;
+				int commited = 0;
+				for (int i = 0; i < responses.size(); i++) {
+					AppendResponse response = responses.get(i);
+					if(response != null) {
+						long appendedIndex = getLeaderState().getNextIndex().get(clusterArray[i]);
+						if(response.isSuccess()) {
+							getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex+1);
+							getLeaderState().getMatchIndex().put(clusterArray[i], appendedIndex);
+							commited++;
+						}else {
+							getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex-1 < 0 ? 0 : appendedIndex-1);
+						}
+					}
+				}
+
+				if (commited > clusterArray.length/2 && entry != null) {
+					state.setCommitIndex(entry.getIndex());
+					//				state.appendLog(entry);
+					return true;
+				}
 			}
+			return false;
+		}finally {
+			state.getLock().unlock();
 		}
-		return false;
 	}
 }
