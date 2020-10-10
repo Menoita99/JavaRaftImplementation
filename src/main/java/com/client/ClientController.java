@@ -30,7 +30,6 @@ public class ClientController extends Application implements Initializable{
 
 	//FXML attributes
     @FXML private Text ipClient;
-    @FXML private Text portClient;
     @FXML private Text ipLeader;
     @FXML private Text portLeader;
     @FXML private TextArea textArea;
@@ -44,7 +43,6 @@ public class ClientController extends Application implements Initializable{
 		instance = this;
 		client = new Client();
 		ipClient.setText(client.getAddress().getIpAddress());
-		portClient.setText(client.getAddress().getPort()+"");
 		ipLeader.textProperty().bind((client.getLeaderIp()));
 		portLeader.textProperty().bind((client.getLeaderPort()));
 		textArea.setEditable(false);

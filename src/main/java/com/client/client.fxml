@@ -29,14 +29,12 @@
                                  </font>
                               </Text>
                               <Text fill="WHITE" layoutX="14.0" layoutY="70.0" strokeType="OUTSIDE" strokeWidth="0.0" text="IP:" />
-                              <Text fill="WHITE" layoutX="14.0" layoutY="95.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Port:" />
                               <Text fill="WHITE" layoutX="22.0" layoutY="139.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Leader">
                                  <font>
                                     <Font size="25.0" />
                                  </font>
                               </Text>
                               <Text fx:id="ipClient" fill="WHITE" layoutX="47.0" layoutY="70.0" strokeType="OUTSIDE" strokeWidth="0.0" text="192.164.1.2" wrappingWidth="74.0478515625" />
-                              <Text fx:id="portClient" fill="WHITE" layoutX="47.0" layoutY="95.0" strokeType="OUTSIDE" strokeWidth="0.0" text="192.164.1.2" wrappingWidth="74.0478515625" />
                               <Text fill="WHITE" layoutX="12.0" layoutY="170.0" strokeType="OUTSIDE" strokeWidth="0.0" text="IP:" />
                               <Text fill="WHITE" layoutX="12.0" layoutY="195.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Port:" />
                               <Text fx:id="ipLeader" fill="WHITE" layoutX="45.0" layoutY="170.0" strokeType="OUTSIDE" strokeWidth="0.0" text="192.164.1.2" wrappingWidth="74.0478515625" />
