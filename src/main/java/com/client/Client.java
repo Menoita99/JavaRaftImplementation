@@ -110,7 +110,7 @@ public class Client {
 		try {
 
 			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-			ServerResponse response = look_up.execute("", generateCommandID(clientID));
+			look_up.execute("", generateCommandID(clientID));
 			
 //			 If the Object of the ServerResponse instance is null, that means it received
 //			 the Address of the leader. Try reconnect to leader

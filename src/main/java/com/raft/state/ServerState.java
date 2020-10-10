@@ -29,9 +29,9 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ServerState implements Serializable{
 	private static final long serialVersionUID = 1L;
 
-//	private static final String STATE_FILE = "src/main/resources/states.conf";
+//	private static final String STATE_FILE = "src/main/resources/state.conf";
 //	private static final String LOG_FILE = "src/main/resources/log.txt";
-	private  String STATE_FILE = "src/main/resources/states";
+	private  String STATE_FILE = "src/main/resources/state";
 	private  String LOG_FILE = "src/main/resources/log";
 
 
@@ -57,6 +57,7 @@ public class ServerState implements Serializable{
 	private ReentrantLock lock = new ReentrantLock();
 	
 	public ServerState() throws IOException {
+		//just to test
 		int r = (int)(Math.random()*100);
 		STATE_FILE = STATE_FILE+r+".conf";
 		LOG_FILE = LOG_FILE+r+".txt";
@@ -75,8 +76,8 @@ public class ServerState implements Serializable{
 		stateProperties = new Properties();
 		new File(STATE_FILE).createNewFile();
 		stateProperties.load(new FileInputStream(STATE_FILE));
-		currentTerm = Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0"));
-		votedFor = Address.parse((String) stateProperties.getOrDefault("votedFor", null));
+		setCurrentTerm(Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0")));
+		setVotedFor(Address.parse((String) stateProperties.getOrDefault("votedFor", new Address("", -1).toFileString())));
 		
 		File logFile = new File(LOG_FILE);
 		logFile.createNewFile();

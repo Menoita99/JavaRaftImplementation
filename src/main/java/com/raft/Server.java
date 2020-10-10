@@ -70,9 +70,9 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 	private Address leaderId;
 	private Address selfId;
-	
+
 	private Map<String, Operation> operationsMap = new HashMap<String, Operation>();
-	
+
 
 	/**
 	 * This constructor must only be used to test
@@ -239,7 +239,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
-			//			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
+			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 
 			for (Log log : entries) {
 				Log lastLog = state.getLastLog();
@@ -369,15 +369,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		//TEMP
 
 		switch (mode) {
-		case FOLLOWER: {
+		case FOLLOWER: 
 			return new ServerResponse(leaderId, null);
-		}
-		case CANDIDATE:{
+		case CANDIDATE:
 			//TODO
 			return null;
-		}case LEADER:{
+		case LEADER:
 			return leaderResponse(string, commandID);
-		}
+
 		}
 		return null;
 	}
@@ -394,15 +393,15 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	private ServerResponse leaderResponse(String command, String commandID) {
 		ServerResponse serverResponse;
-		
+
 		if(command==null || command.isBlank())
 			serverResponse = new ServerResponse(leaderId,  null);
 		else {
 			serverResponse = new ServerResponse(leaderId,  command);
-			
+
 			//commandID format is 'clientIP:timestamp'
 			String clientIP = commandID.split(":")[0];
-			
+
 			//if there already is an entry from the client requesting command, and this command has already been executed, directly sends response
 			//which had been stored when it was originally executed
 			for (Map.Entry<String, Operation> entry : operationsMap.entrySet()) {
@@ -413,7 +412,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 					}
 				}
 			}
-			
+
 			try {
 				//executes command and stores the response on the serverResponse and also on the map associated with the clientIP
 				Object response = state.getInterpreter().execute(command);
@@ -426,15 +425,15 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				}
 				operationsMap.put(clientIP, new Operation(commandID, response));
 				System.out.println(operationsMap.toString());
-				
+
 			}catch (Exception e) {
 				serverResponse.setResponse(e);
 				e.printStackTrace();
 			}
 			Log log = new Log(state.getLastLog().getIndex()+1, state.getCurrentTerm(), command);
 			sendAppendEntriesRequest(log);
-			
-			
+
+
 		}
 		System.out.println(serverResponse);
 		return serverResponse;
@@ -486,9 +485,12 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				List<Future<AppendResponse>> futures = new ArrayList<>(clusterFollow.size());
 				for (int i = 0; i < clusterFollow.size(); i++) {
 					FollowerBehaviour follower = clusterFollow.get(i);
-					if(follower != null)
-						futures.add(i,executor.submit(()->follower.appendEntries(term, selfId, prevLogIndex, prevLogTerm, List.of(entry), leaderCommit)));
-				}
+					if(follower != null) {
+						List<Log> entries = new ArrayList<>();
+						entries.add(entry);
+						futures.add(i,executor.submit(()->follower.appendEntries(term, selfId, prevLogIndex, prevLogTerm,entries, leaderCommit)));
+						}
+					}
 
 				List<AppendResponse> responses = new ArrayList<>(clusterFollow.size());
 				for (int i = 0; i < futures.size(); i++) {

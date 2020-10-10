@@ -24,7 +24,7 @@ public class Address implements Serializable{
 	private String ipAddress; //IP address
 	private int port;		  //port
 
-	
+
 	/**
 	 * Parses the given string into Address object
 	 * String format : //TODO
@@ -32,16 +32,20 @@ public class Address implements Serializable{
 	 * @return returns the Address parsed or null if it could not parse the given string
 	 */
 	public static Address parse(String s) {
-		if(s == null || s.isBlank())
-			return null;
-		//TODO
+		System.out.println(s!= null);
+		if(s != null ) {
+			if(!s.isBlank()) {
+				String[] splited = s.split(";");
+				return new Address(splited[0], Integer.parseInt(splited[1]));
+			}
+		}
 		return null;
 	}
 
-	
-	
-	
-	
+
+
+
+
 	/**
 	 * @return returns local network IP
 	 */
@@ -63,8 +67,8 @@ public class Address implements Serializable{
 	}
 
 
-	
-	
+
+
 	/**
 	 * @return returns public network IP
 	 */
@@ -76,13 +80,13 @@ public class Address implements Serializable{
 		} catch (IOException e) {e.printStackTrace();}
 		return null;
 	}
-	
-	
-	
+
+
+
 	public static String toFileString(Address a) {
 		return a.getIpAddress()+";"+a.getPort();
 	}
-	
+
 	public String toFileString() {
 		return this.getIpAddress()+";"+this.getPort();
 	}
