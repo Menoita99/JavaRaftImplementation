@@ -13,7 +13,9 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Timer;
@@ -28,6 +30,7 @@ import java.util.concurrent.TimeoutException;
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
 import com.raft.models.Log;
+import com.raft.models.Operation;
 import com.raft.models.ServerResponse;
 import com.raft.models.VoteResponse;
 import com.raft.state.Mode;
@@ -67,6 +70,9 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 	private Address leaderId;
 	private Address selfId;
+	
+	private Map<String, Operation> operationsMap = new HashMap<String, Operation>();
+	
 
 	/**
 	 * This constructor must only be used to test
@@ -370,7 +376,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			//TODO
 			return null;
 		}case LEADER:{
-			return leaderResponse(string);
+			return leaderResponse(string, commandID);
 		}
 		}
 		return null;
@@ -386,20 +392,49 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @param string client command
 	 * @return ServerResponse
 	 */
-	private ServerResponse leaderResponse(String command) {
+	private ServerResponse leaderResponse(String command, String commandID) {
 		ServerResponse serverResponse;
+		
 		if(command==null || command.isBlank())
 			serverResponse = new ServerResponse(leaderId,  null);
 		else {
 			serverResponse = new ServerResponse(leaderId,  command);
+			
+			//commandID format is 'clientIP:timestamp'
+			String clientIP = commandID.split(":")[0];
+			
+			//if there already is an entry from the client requesting command, and this command has already been executed, directly sends response
+			//which had been stored when it was originally executed
+			for (Map.Entry<String, Operation> entry : operationsMap.entrySet()) {
+				if(entry.getKey()==clientIP) {
+					if (entry.getValue().getOperationID()==commandID) {
+						serverResponse.setResponse(entry.getValue().getResponse());
+						return serverResponse;
+					}
+				}
+			}
+			
 			try {
-				serverResponse.setResponse(state.getInterpreter().execute(command));
+				//executes command and stores the response on the serverResponse and also on the map associated with the clientIP
+				Object response = state.getInterpreter().execute(command);
+				serverResponse.setResponse(response);
+				if (operationsMap.containsKey(clientIP)) {
+					System.out.println("Updated entry on map for client: " + clientIP);
+				}
+				else {
+					System.out.println("Created new entry on map for client: " + clientIP);
+				}
+				operationsMap.put(clientIP, new Operation(commandID, response));
+				System.out.println(operationsMap.toString());
+				
 			}catch (Exception e) {
 				serverResponse.setResponse(e);
 				e.printStackTrace();
 			}
 			Log log = new Log(state.getLastLog().getIndex()+1, state.getCurrentTerm(), command);
 			sendAppendEntriesRequest(log);
+			
+			
 		}
 		System.out.println(serverResponse);
 		return serverResponse;

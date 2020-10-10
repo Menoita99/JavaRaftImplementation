@@ -8,7 +8,6 @@ import java.net.UnknownHostException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
-import java.util.ArrayList;
 import java.util.Properties;
 import java.util.Random;
 
@@ -33,8 +32,6 @@ public class Client {
 	private SimpleStringProperty leaderPort;
 	private SimpleStringProperty leaderIp;
 
-	private ArrayList<String> logsList;
-	
 	private String clientID;
 	
 	
@@ -42,7 +39,11 @@ public class Client {
 	public Client() {
 		readIni();
 		connectToServer();
-		clientID = "";
+		try {
+			clientID = Inet4Address.getLocalHost().getHostAddress();
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		}
 	}
 
 
@@ -52,7 +53,6 @@ public class Client {
 	 * Generates a random port number.
 	 */
 	private void readIni() {
-		logsList = new ArrayList<>();
 		try {
 			Properties p = new Properties();
 			p.load(new FileInputStream("src/main/resources/config.ini"));
@@ -84,7 +84,7 @@ public class Client {
 
 		logID += ":"+System.currentTimeMillis();
 		String generatedLog = logID + "-" + log;
-		logsList.add(generatedLog);
+		System.out.println(generatedLog);
 		return generatedLog;
 	}
 
@@ -110,19 +110,19 @@ public class Client {
 		try {
 
 			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-//			ServerResponse response = look_up.execute(generateFullLog("try_connection"), generateCommandID(clientID));
+			ServerResponse response = look_up.execute("", generateCommandID(clientID));
 			
-			// If the Object of the ServerResponse instance is null, that means it received
-			// the Address of the leader. Try reconnect to leader
+//			 If the Object of the ServerResponse instance is null, that means it received
+//			 the Address of the leader. Try reconnect to leader
 //			if (response.getResponse()==null) {
 //				leaderIp.set(response.getLeader().getIpAddress());
 //				leaderPort.set(String.valueOf(response.getLeader().getPort()));
+//				
 //				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-//				response = look_up.execute(logsList.get(0), generateCommandID(clientID));
+//				response = look_up.execute("", generateCommandID(clientID));
 //				System.out.println("Follower answer:"+response);
 //
 //			}
-			logsList.clear();
 			
 		} catch (NotBoundException | MalformedURLException | RemoteException e) {
 			e.printStackTrace();
@@ -141,10 +141,11 @@ public class Client {
 	 */
 	public ServerResponse request(String command) throws RemoteException {
 		ServerResponse to_return = null;
+		String operationID = generateCommandID(clientID);
 		//3 tries
 		for (int i = 0; i < 3; i++) {
 			try {
-				to_return = look_up.execute(command, generateCommandID(clientID));
+				to_return = look_up.execute(command, operationID);
 				break;
 			} catch (RemoteException | NullPointerException e) {
 				e.printStackTrace();
@@ -165,6 +166,6 @@ public class Client {
 	 * @return clientID + timestamp
 	 */
 	public String generateCommandID (String clientID) {
-		return clientID + System.currentTimeMillis();
+		return clientID + ":" +System.currentTimeMillis();
 	}
 }
