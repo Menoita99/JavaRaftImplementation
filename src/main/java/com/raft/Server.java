@@ -233,7 +233,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
-			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
+//			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 
 			for (Log log : entries) {
 				Log lastLog = state.getLastLog();
@@ -354,9 +354,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	@Override
 	public ServerResponse execute(String string) throws RemoteException{
 		//TEMP
-		if(selfId.getPort() == 1000)
+		if(selfId.getPort() == 1000) {
 			this.mode=Mode.LEADER;
-		else {
+			getLeaderState().reset(this);
+		}else {
 			this.mode=Mode.FOLLOWER;
 		}
 		//TEMP
@@ -391,14 +392,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			serverResponse = new ServerResponse(leaderId,  null);
 		else {
 			serverResponse = new ServerResponse(leaderId,  command);
-//			sendAppendEntriesRequest(null);
 			try {
 				serverResponse.setResponse(state.getInterpreter().execute(command));
 			}catch (Exception e) {
 				serverResponse.setResponse(e);
 				e.printStackTrace();
 			}
-			//TODO create a log object and pass it to this method
+			Log log = new Log(state.getLastLog().getIndex()+1, state.getCurrentTerm(), command);
+			sendAppendEntriesRequest(log);
 		}
 		System.out.println(serverResponse);
 		return serverResponse;
@@ -477,14 +478,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 						getLeaderState().getMatchIndex().put(clusterArray[i], appendedIndex);
 						commited++;
 					}else {
-						getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex-1);
+						getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex-1 < 0 ? 0 : appendedIndex-1);
 					}
 				}
 			}
 
 			if (commited > clusterArray.length/2 && entry != null) {
 				state.setCommitIndex(entry.getIndex());
-				state.appendLog(entry);
+//				state.appendLog(entry);
 				return true;
 			}
 		}

@@ -29,7 +29,7 @@ public class LeaderState implements Serializable{
 		Address[] servers = s.getClusterArray();
 		for (int i = 0; i < servers.length; i++) {
 			nextIndex.put(servers[i], s.getState().getLastLog().getIndex()+1);
-			nextIndex.put(servers[i], 0L);
+			matchIndex.put(servers[i], 0L);
 		}
 	}
 }

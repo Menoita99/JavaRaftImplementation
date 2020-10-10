@@ -28,8 +28,10 @@ import lombok.Setter;
 public class ServerState implements Serializable{
 	private static final long serialVersionUID = 1L;
 
-	private static final String STATE_FILE = "src/main/resources/state.conf";
-	private static final String LOG_FILE = "src/main/resources/log.txt";
+//	private static final String STATE_FILE = "src/main/resources/states.conf";
+//	private static final String LOG_FILE = "src/main/resources/log.txt";
+	private  String STATE_FILE = "src/main/resources/states";
+	private  String LOG_FILE = "src/main/resources/log";
 
 
 	@Setter(value = AccessLevel.NONE)
@@ -43,7 +45,7 @@ public class ServerState implements Serializable{
 	private long currentTerm = 0;
 	private Address votedFor;
 	@Setter(value = AccessLevel.NONE)
-	private Log lastLog;
+	private Log lastLog = new Log(0,0,null);
 
 	// Volatile state
 	private long commitIndex = 0;
@@ -53,6 +55,9 @@ public class ServerState implements Serializable{
 
 	
 	public ServerState() throws IOException {
+		int r = (int)(Math.random()*100);
+		STATE_FILE = STATE_FILE+r+".conf";
+		LOG_FILE = LOG_FILE+r+".txt";
 		init(); 
 	}
 
@@ -120,6 +125,7 @@ public class ServerState implements Serializable{
 		if(currentTerm != log.getTerm())
 			setCurrentTerm(log.getTerm());
 		logWriter.println(log.toFileString());
+		logWriter.flush();
 	}
 
 
@@ -177,4 +183,5 @@ public class ServerState implements Serializable{
 			e.printStackTrace();
 		}
 	}
+	
 }
