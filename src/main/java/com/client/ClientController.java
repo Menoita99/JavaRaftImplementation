@@ -65,7 +65,7 @@ public class ClientController extends Application implements Initializable{
     	try {
 	    	String command = textField.getText();
 	    	textArea.appendText("> "+command+"\n");
-			ServerResponse reponse = client.executeCommand(command);
+			ServerResponse reponse = client.request(command);
 	    	textField.clear();
 	    	if(reponse.getResponse() == null) textArea.appendText("\n");
 	    	else textArea.appendText(reponse.getResponse().toString()+"\n");

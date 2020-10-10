@@ -96,31 +96,33 @@ public class Client {
 
 			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
 
-			ServerResponse response = look_up.request(generateFullLog("try_connection"));
-			// If the Object of the ServerResponse instance is null, that means it received
-			// the Address of the leader. Try reconnect to leader
-			if (response.getResponse()==null) {
-				leaderIp.set(response.getLeader().getIpAddress());
-				leaderPort.set(String.valueOf(response.getLeader().getPort()));
-				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-				response = look_up.request(logsList.get(0));
-				System.out.println("Follower answer:"+response);
-
-			}
-			logsList.clear();
+//			ServerResponse response = look_up.execute(generateFullLog("try_connection"));
+//			// If the Object of the ServerResponse instance is null, that means it received
+//			// the Address of the leader. Try reconnect to leader
+//			if (response.getResponse()==null) {
+//				leaderIp.set(response.getLeader().getIpAddress());
+//				leaderPort.set(String.valueOf(response.getLeader().getPort()));
+//				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
+//				response = look_up.execute(logsList.get(0));
+//				System.out.println("Follower answer:"+response);
+//
+//			}
+//			logsList.clear();
 		} catch (NotBoundException | MalformedURLException | RemoteException e) {
+			e.printStackTrace();
 			System.out.println("This cluster member is offline");
 			connectToServer();
 		}
 	}
 
 
-	public ServerResponse executeCommand(String command) throws RemoteException {
+	public ServerResponse request(String command) throws RemoteException {
 		ServerResponse to_return = null;
 		//3 tries
 		for (int i = 0; i < 3; i++) {
 			try {
-				to_return = look_up.request(command);
+				to_return = look_up.execute(command);
+				break;
 			} catch (RemoteException | NullPointerException e) {
 				e.printStackTrace();
 				connectToServer();

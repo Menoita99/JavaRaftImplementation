@@ -13,7 +13,6 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
@@ -59,6 +58,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	//Reference to the cluster servers to make RPC (remote procedure call)
 	private ArrayList<FollowerBehaviour> clusterFollow = new ArrayList<>();
 	private ArrayList<LeaderBehaviour> clusterLeader = new ArrayList<>();
+	private Address[] clusterArray;
 
 	private HeartBeatSender heartBeatSender;
 
@@ -68,7 +68,18 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private Address leaderId;
 	private Address selfId;
 
-	private Address[] clusterArray;
+	/**
+	 * This constructor must only be used to test
+	 */
+	public Server(Properties p) throws IOException, AlreadyBoundException{
+		state = new ServerState();
+		readIni(p);
+		registServer();
+		tryToConnect();
+		heartBeatSender = new HeartBeatSender(this);
+		heartBeatSender.start();
+		restartTimer();
+	}
 
 
 
@@ -77,8 +88,9 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 	public Server() throws IOException, AlreadyBoundException{
 		state = new ServerState();
-		readIni();
+		readIni(null);
 		registServer();
+		tryToConnect();
 		heartBeatSender = new HeartBeatSender(this);
 		heartBeatSender.start();
 		restartTimer();
@@ -92,17 +104,23 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	/**
 	 * Reads configuration file and initialises attributes
 	 */
-	private void readIni() throws  IOException, AlreadyBoundException {
-		Properties p = new Properties();
-		p.load(new FileInputStream("src/main/resources/config.ini"));
-
+	private void readIni(Properties p) throws  IOException, AlreadyBoundException {
+		if(p == null) { 
+			p = new Properties();
+			p.load(new FileInputStream("src/main/resources/config.ini"));
+		}
 		selfId = new Address(p.getProperty("ip"), Integer.parseInt(p.getProperty("port")));
 		System.out.println(selfId);
 
 		String[] clusterString = p.getProperty("cluster").split(";");
 		clusterArray = new Address[clusterString.length];
 		for (int i = 0; i < clusterString.length; i++) {
-			String[] splited = clusterString[i].split(";");
+			clusterLeader.add(null);
+			clusterFollow.add(null);
+		}
+		
+		for (int i = 0; i < clusterString.length; i++) {
+			String[] splited = clusterString[i].split(":");
 			clusterArray[i] = new Address(splited[0], Integer.parseInt(splited[1]));
 		}
 
@@ -128,13 +146,12 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	private void registServer() throws RemoteException, AlreadyBoundException, AccessException, MalformedURLException {
 		Registry registry = LocateRegistry.createRegistry(selfId.getPort());
-		LeaderBehaviour leader = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
-		FollowerBehaviour follow = (FollowerBehaviour) UnicastRemoteObject.exportObject(this, 0);
-		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", leader);
-		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", leader);
-		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/follow", follow);
-		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/follow", follow);
-		tryToConnect();
+		LeaderBehaviour server = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
+		System.setProperty( "java.rmi.server.hostname", "127.0.0.1");
+		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", server);
+		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", server);
+		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/follow", (FollowerBehaviour)server);
+		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/follow", (FollowerBehaviour)server);
 	}
 
 
@@ -147,11 +164,12 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private void tryToConnect() {
 		for (int i = 0; i < clusterArray.length; i++) {
 			try {
-				if(clusterFollow.get(i) == null || clusterFollow.size() < i )
-					clusterFollow.add((FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow"));
-				if(clusterLeader.get(i) == null || clusterLeader.size() < i )
-					clusterLeader.add((LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
+				if( clusterFollow.size() <= i || clusterFollow.get(i) == null )
+					clusterFollow.add(i,(FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow"));
+				if( clusterLeader.size() <= i || clusterLeader.get(i) == null )
+					clusterLeader.add(i,(LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
 			} catch (MalformedURLException | RemoteException | NotBoundException e) {
+				e.printStackTrace();
 				continue;
 			}
 		}
@@ -186,7 +204,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				resposta.setVoteGranted(true);
 			}
 		}
-
 		return resposta;
 	}
 
@@ -210,9 +227,9 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		restartTimer();
 		this.leaderId = leaderId;
 		shouldBecameFollower(term);
-		
-		//	boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
-		boolean hasPreviousLog = prevLogIndex == state.getLastLog().getIndex() && prevLogTerm == state.getLastLog().getTerm();
+
+		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
+		//		boolean hasPreviousLog = prevLogIndex == state.getLastLog().getIndex() && prevLogTerm == state.getLastLog().getTerm();
 
 		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
@@ -263,13 +280,13 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			System.out.println("Starting Election");
 
 			//Transition to candidate state
-			ArrayList<Future<VoteResponse>> listFuture = new ArrayList<>();
 			mode = Mode.CANDIDATE;
 			this.state.setCurrentTerm(this.state.getCurrentTerm() +1);
 			this.state.setVotedFor(this.selfId);
 			restartTimer();
 
 			//Send RequestVote to every other Server
+			ArrayList<Future<VoteResponse>> listFuture = new ArrayList<>();
 			for(LeaderBehaviour clstr : clusterLeader) {
 				Future<VoteResponse> resp = executor.submit(()-> clstr.requestVote(this.state.getCurrentTerm(), selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm()));
 				listFuture.add(resp);
@@ -289,8 +306,9 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 			if (votes > clusterArray.length/2) {
 				mode = Mode.LEADER;
+				getLeaderState().reset(this);
 				leaderId = selfId;
-				heartBeatSender.notifyLeader();
+				heartBeatSender.goOn();
 				restartTimer();
 			}else if((double) votes / (double) clusterArray.length == 0.5) {
 				startElection();
@@ -334,7 +352,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @return ServerResponse
 	 */
 	@Override
-	public ServerResponse request(String string) throws RemoteException{
+	public ServerResponse execute(String string) throws RemoteException{
 		//TEMP
 		if(selfId.getPort() == 1000)
 			this.mode=Mode.LEADER;
@@ -373,6 +391,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			serverResponse = new ServerResponse(leaderId,  null);
 		else {
 			serverResponse = new ServerResponse(leaderId,  command);
+//			sendAppendEntriesRequest(null);
 			try {
 				serverResponse.setResponse(state.getInterpreter().execute(command));
 			}catch (Exception e) {
@@ -380,8 +399,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				e.printStackTrace();
 			}
 			//TODO create a log object and pass it to this method
-			sendAppendEntriesRequest(null);
 		}
+		System.out.println(serverResponse);
 		return serverResponse;
 	}
 
@@ -418,14 +437,57 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 
-	public void sendAppendEntriesRequest(Log entry) {
+	public boolean sendAppendEntriesRequest(Log entry) {
 		if(mode == Mode.LEADER) {
 			tryToConnect();
-			List<Future<AppendResponse>> futures = new LinkedList<>();
-			for (FollowerBehaviour server : clusterFollow) {
-//				futures.add(executor.submit(()->server.appendEntries(state.getCurrentTerm(), selfId, prevLogIndex, prevLogTerm, entries, leaderCommit)));
-				//TODO
+			long term = state.getCurrentTerm();
+			long prevLogIndex = state.getLastLog().getIndex();
+			long prevLogTerm = state.getLastLog().getTerm();
+			long leaderCommit = state.getCommitIndex();
+
+			List<Future<AppendResponse>> futures = new ArrayList<>(clusterFollow.size());
+			for (int i = 0; i < clusterFollow.size(); i++) {
+				FollowerBehaviour follower = clusterFollow.get(i);
+				if(follower != null)
+					futures.add(i,executor.submit(()->follower.appendEntries(term, selfId, prevLogIndex, prevLogTerm, List.of(entry), leaderCommit)));
+			}
+
+			List<AppendResponse> responses = new ArrayList<>(clusterFollow.size());
+			for (int i = 0; i < futures.size(); i++) {
+				try {
+					Future<AppendResponse> future = futures.get(i);
+					if(future != null)
+						responses.add(i,future.get(WAIT_FOR_RESPONSE_TIME_OUT, TimeUnit.MILLISECONDS));
+				} catch (InterruptedException | ExecutionException e) {
+					e.printStackTrace();
+				} catch (TimeoutException e) {
+					//TODO
+					if(entry != null)
+						System.out.println("TODO RETRY UNTIL IT WORK");
+				}
+			}
+
+			int commited = 0;
+			for (int i = 0; i < responses.size(); i++) {
+				AppendResponse response = responses.get(i);
+				if(response != null) {
+					long appendedIndex = getLeaderState().getNextIndex().get(clusterArray[i]);
+					if(response.isSuccess()) {
+						getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex+1);
+						getLeaderState().getMatchIndex().put(clusterArray[i], appendedIndex);
+						commited++;
+					}else {
+						getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex-1);
+					}
+				}
+			}
+
+			if (commited > clusterArray.length/2 && entry != null) {
+				state.setCommitIndex(entry.getIndex());
+				state.appendLog(entry);
+				return true;
 			}
 		}
+		return false;
 	}
 }
