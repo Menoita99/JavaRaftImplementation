@@ -22,13 +22,7 @@ import lombok.Data;
 @Data
 public class Client {
 
-	/*
-	 * 1-cliente liga e conecta-se a um server random se nao for lider o follower
-	 * rencaminha po lider e este faz o pedido de novo se o lider crasha ele volta a
-	 * escolher um server random
-	 * 
-	 * cada comando do cliente tem o mesmo id
-	 **/
+	
 	private Address address;
 
 	private String clusterMembers ;
@@ -39,17 +33,24 @@ public class Client {
 	private SimpleStringProperty leaderPort;
 	private SimpleStringProperty leaderIp;
 
-
-
 	private ArrayList<String> logsList;
+	
+	private String clientID;
+	
+	
+	
 	public Client() {
 		readIni();
 		connectToServer();
+		clientID = "";
 	}
 
 
 
-
+	/**
+	 * Reads config.ini located at "src/main/resources" and fills a string with all cluster members' addresses
+	 * Generates a random port number.
+	 */
 	private void readIni() {
 		logsList = new ArrayList<>();
 		try {
@@ -66,6 +67,12 @@ public class Client {
 	}
 
 
+	
+	/**
+	 * Receives log and adds a unique ID to said log
+	 * @param log
+	 * @return received log, along with a unique ID
+	 */
 	public String generateFullLog(String log) {
 		String logID = "clientID:";
 		try {
@@ -82,11 +89,19 @@ public class Client {
 	}
 
 
+	
+	
+	/**
+	 * Connects to server
+	 * Gets the ip and port of the first cluster member listed and attempts connection, 
+	 * if this member is offline tries again with the next member, and so on.
+	 * 
+	 */
 	public void connectToServer() {
-		if(tryCount==clusterMembersVector.length-1)
+		if(tryCount==clusterMembersVector.length-1) {
 			return;
+		}
 
-		//Suggestion use a for loop instead of a recursive method
 		tryCount++;
 		leaderIp = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[0]);
 		leaderPort = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[1]);
@@ -95,19 +110,20 @@ public class Client {
 		try {
 
 			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
+			ServerResponse response = look_up.execute(generateFullLog("try_connection"), generateCommandID(clientID));
+			
+			// If the Object of the ServerResponse instance is null, that means it received
+			// the Address of the leader. Try reconnect to leader
+			if (response.getResponse()==null) {
+				leaderIp.set(response.getLeader().getIpAddress());
+				leaderPort.set(String.valueOf(response.getLeader().getPort()));
+				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
+				response = look_up.execute(logsList.get(0), generateCommandID(clientID));
+				System.out.println("Follower answer:"+response);
 
-//			ServerResponse response = look_up.execute(generateFullLog("try_connection"));
-//			// If the Object of the ServerResponse instance is null, that means it received
-//			// the Address of the leader. Try reconnect to leader
-//			if (response.getResponse()==null) {
-//				leaderIp.set(response.getLeader().getIpAddress());
-//				leaderPort.set(String.valueOf(response.getLeader().getPort()));
-//				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-//				response = look_up.execute(logsList.get(0));
-//				System.out.println("Follower answer:"+response);
-//
-//			}
-//			logsList.clear();
+			}
+			logsList.clear();
+			
 		} catch (NotBoundException | MalformedURLException | RemoteException e) {
 			e.printStackTrace();
 			System.out.println("This cluster member is offline");
@@ -116,12 +132,19 @@ public class Client {
 	}
 
 
+	
+	/**
+	 * 
+	 * @param command
+	 * @return
+	 * @throws RemoteException
+	 */
 	public ServerResponse request(String command) throws RemoteException {
 		ServerResponse to_return = null;
 		//3 tries
 		for (int i = 0; i < 3; i++) {
 			try {
-				to_return = look_up.execute(command);
+				to_return = look_up.execute(command, generateCommandID(clientID));
 				break;
 			} catch (RemoteException | NullPointerException e) {
 				e.printStackTrace();
@@ -135,4 +158,13 @@ public class Client {
 		return to_return;
 	}
 
+	
+	/**
+	 * Generates unique ID
+	 * @param clientID
+	 * @return clientID + timestamp
+	 */
+	public String generateCommandID (String clientID) {
+		return clientID + System.currentTimeMillis();
+	}
 }

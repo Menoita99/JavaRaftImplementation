@@ -352,7 +352,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @return ServerResponse
 	 */
 	@Override
-	public ServerResponse execute(String string) throws RemoteException{
+	public ServerResponse execute(String string, String commandID) throws RemoteException{
 		//TEMP
 		if(selfId.getPort() == 1000) {
 			this.mode=Mode.LEADER;
