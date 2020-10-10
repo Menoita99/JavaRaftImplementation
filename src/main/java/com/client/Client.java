@@ -37,13 +37,14 @@ public class Client {
 	
 	
 	public Client() {
-		readIni();
-		connectToServer();
 		try {
 			clientID = Inet4Address.getLocalHost().getHostAddress();
 		} catch (UnknownHostException e) {
 			e.printStackTrace();
 		}
+		readIni();
+		connectToServer();
+		
 	}
 
 
@@ -57,8 +58,7 @@ public class Client {
 			Properties p = new Properties();
 			p.load(new FileInputStream("src/main/resources/config.ini"));
 			clusterMembers = p.getProperty("cluster");
-			Random random = new Random();
-			address = new Address(p.getProperty("ip"), random.nextInt(10000) + 1010);
+			address = new Address(clientID, 0);
 
 		} catch (IOException e) {
 			e.printStackTrace();
