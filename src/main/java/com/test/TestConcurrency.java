@@ -13,6 +13,12 @@ import com.raft.LeaderBehaviour;
 import com.raft.Server;
 
 public class TestConcurrency {
+	
+	/**
+	 * Opens 3 servers and makes client requests
+	 * @param args
+	 * @throws Exception
+	 */
 	public static void main(String[] args) throws Exception{
 		Properties p = new Properties();
 		p.load(new FileInputStream("src/main/resources/config.ini"));
@@ -24,10 +30,10 @@ public class TestConcurrency {
 		p.setProperty("port", ""+1002);
 		new Thread (() -> {try {new Server(p);} catch (IOException | AlreadyBoundException e) {}}).start();
 		Thread.sleep(2000);
-		TestClientConcurrencie();
+		TestClientConcurrency();
 	}
 
-	private static void TestClientConcurrencie() throws NotBoundException, MalformedURLException, RemoteException {
+	private static void TestClientConcurrency() throws NotBoundException, MalformedURLException, RemoteException {
 		LeaderBehaviour l = (LeaderBehaviour) Naming.lookup("rmi://127.0.0.1:1000/leader");
 		new Thread(() ->{
 			for (int i = 0; i < 10; i++) {
@@ -41,7 +47,7 @@ public class TestConcurrency {
 		new Thread(() ->{
 			for (int i = 0; i < 10; i++) {
 				try {
-					l.execute("sleep(15)", "127.0.0.2:"+i);
+					l.execute("5*5", "127.0.0.2:"+i);
 				} catch (RemoteException e) {
 					e.printStackTrace();
 				}
