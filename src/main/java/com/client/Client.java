@@ -30,12 +30,16 @@ public class Client {
 
 	private SimpleStringProperty leaderPort;
 	private SimpleStringProperty leaderIp;
+	
+	
 
 	private String clientID;
 	
 	
 	
 	public Client() {
+		leaderIp = new SimpleStringProperty();
+		leaderPort = new SimpleStringProperty();
 		try {
 			clientID = Inet4Address.getLocalHost().getHostAddress();
 		} catch (UnknownHostException e) {
@@ -102,26 +106,25 @@ public class Client {
 		}
 
 		tryCount++;
-		leaderIp = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[0]);
-		leaderPort = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[1]);
-		System.out.println("Request ->"+leaderIp.get() + ":"+leaderPort.get());
+		SimpleStringProperty ipToConnect = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[0]);
+		SimpleStringProperty portToConnect = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[1]);
+		System.out.println("Request ->"+ipToConnect.get() + ":"+portToConnect.get());
 
 		try {
 
-			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-			look_up.execute("", generateCommandID(clientID));
+			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + ipToConnect.get() + ":" + portToConnect.get() + "/leader");
+			ServerResponse response = look_up.execute("", generateCommandID(clientID));
 			
 //			 If the Object of the ServerResponse instance is null, that means it received
 //			 the Address of the leader. Try reconnect to leader
-//			if (response.getResponse()==null) {
-//				leaderIp.set(response.getLeader().getIpAddress());
-//				leaderPort.set(String.valueOf(response.getLeader().getPort()));
-//				
-//				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-//				response = look_up.execute("", generateCommandID(clientID));
-//				System.out.println("Follower answer:"+response);
-//
-//			}
+			if (response.getResponse()==null) {
+				System.out.println("Received message from follower, attempting leader connect");
+				leaderIp.set(response.getLeader().getIpAddress());
+				leaderPort.set(String.valueOf(response.getLeader().getPort()));
+				
+				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
+				response = look_up.execute("", generateCommandID(clientID));
+			}
 			
 		} catch (NotBoundException | MalformedURLException | RemoteException e) {
 			e.printStackTrace();
