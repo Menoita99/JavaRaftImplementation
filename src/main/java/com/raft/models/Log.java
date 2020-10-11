@@ -16,12 +16,13 @@ public class Log implements Serializable {
 	private long index;		  //log index
 	private long term;		  //log term
 	private String command;   //command request by client
+	private String commandID;
 	
 	public String toFileString(Log l) {
-		return l.getIndex()+"|"+l.getTerm()+"|"+l.getCommand().replace("\n", "\\n");
+		return l.getIndex()+"|"+l.getTerm()+"|"+commandID+"|"+l.getCommand().replace("\n", "\\n");
 	}
 
 	public String toFileString() {
-		return this.getIndex()+"|"+this.getTerm()+"|"+this.getCommand().replace("\n", "\\n");
+		return this.getIndex()+"|"+this.getTerm()+"|"+commandID+"|"+this.getCommand().replace("\n", "\\n");
 	}
 }

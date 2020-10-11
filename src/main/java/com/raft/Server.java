@@ -246,8 +246,9 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				if((log.getIndex() == lastLog.getIndex() && log.getTerm() != lastLog.getTerm()) || log.getIndex()<lastLog.getIndex())
 					if(mode == Mode.FOLLOWER)
 						state.override(log);
-				if(log.getIndex()>lastLog.getIndex())
+				if(log.getIndex()>lastLog.getIndex()) {
 					state.appendLog(log);
+				}
 			}
 
 			if(leaderCommit > state.getCommitIndex())
@@ -338,7 +339,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
 		timer.schedule(new TimerTask() {
 			public void run() {
-				System.out.println("Start Election in "+timeOut+"ms");
 				//startElection();
 			}
 		}, timeOut);
@@ -376,7 +376,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			return null;
 		case LEADER:
 			return leaderResponse(string, commandID);
-
 		}
 		return null;
 	}
@@ -404,10 +403,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 			//if there already is an entry from the client requesting command, and this command has already been executed, directly sends response
 			//which had been stored when it was originally executed
-			for (Map.Entry<String, Operation> entry : operationsMap.entrySet()) {
-				if(entry.getKey()==clientIP) {
-					if (entry.getValue().getOperationID()==commandID) {
-						serverResponse.setResponse(entry.getValue().getResponse());
+			for (String key : operationsMap.keySet()) {
+				if(key.equals(clientIP)) {
+					if (operationsMap.get(key).getOperationID().equals(commandID)) {
+						serverResponse.setResponse(operationsMap.get(key).getResponse());
 						return serverResponse;
 					}
 				}
@@ -417,25 +416,20 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				//executes command and stores the response on the serverResponse and also on the map associated with the clientIP
 				Object response = state.getInterpreter().execute(command);
 				serverResponse.setResponse(response);
-				if (operationsMap.containsKey(clientIP)) {
-					System.out.println("Updated entry on map for client: " + clientIP);
-				}
-				else {
-					System.out.println("Created new entry on map for client: " + clientIP);
-				}
+				if (operationsMap.containsKey(clientIP))  System.out.println("Updated entry on map for client: " + clientIP);
+				else  System.out.println("Created new entry on map for client: " + clientIP);
 				operationsMap.put(clientIP, new Operation(commandID, response));
 				System.out.println(operationsMap.toString());
 
 			}catch (Exception e) {
 				serverResponse.setResponse(e);
-				e.printStackTrace();
+				//				e.printStackTrace();
 			}
-			Log log = new Log(state.getLastLog().getIndex()+1, state.getCurrentTerm(), command);
+			Log log = new Log(state.getLastLog().getIndex()+1, state.getCurrentTerm(), command, commandID);
 			sendAppendEntriesRequest(log);
 
 
 		}
-		System.out.println(serverResponse);
 		return serverResponse;
 	}
 
@@ -471,7 +465,11 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 
-
+	/**
+	 * TODO talk about -> futures , lock, list position
+	 * @param entry
+	 * @return returns true if entry was committed otherwise returns false
+	 */
 	public boolean sendAppendEntriesRequest(Log entry) {
 		try {
 			if(mode == Mode.LEADER) {
@@ -489,8 +487,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 						List<Log> entries = new ArrayList<>();
 						entries.add(entry);
 						futures.add(i,executor.submit(()->follower.appendEntries(term, selfId, prevLogIndex, prevLogTerm,entries, leaderCommit)));
-						}
 					}
+				}
 
 				List<AppendResponse> responses = new ArrayList<>(clusterFollow.size());
 				for (int i = 0; i < futures.size(); i++) {
@@ -518,13 +516,12 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 							commited++;
 						}else {
 							getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex-1 < 0 ? 0 : appendedIndex-1);
-						}
+						}	
 					}
 				}
 
 				if (commited > clusterArray.length/2 && entry != null) {
 					state.setCommitIndex(entry.getIndex());
-					//				state.appendLog(entry);
 					return true;
 				}
 			}

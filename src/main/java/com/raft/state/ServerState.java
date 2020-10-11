@@ -46,7 +46,7 @@ public class ServerState implements Serializable{
 	private long currentTerm = 0;
 	private Address votedFor;
 	@Setter(value = AccessLevel.NONE)
-	private Log lastLog = new Log(0,0,null);
+	private Log lastLog = new Log(0,0,null,null);
 
 	// Volatile state
 	private long commitIndex = 0;

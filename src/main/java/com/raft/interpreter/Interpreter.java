@@ -17,12 +17,4 @@ public class Interpreter {
 		System.out.println("Executing -> "+command);
 		return shell.evaluate(command);
 	}
-	
-	
-	public static void main(String[] args) {
-		Interpreter i = new Interpreter();
-		System.out.println(i.execute("x = 1 + 1"));
-		System.out.println(i.execute("a = 5"));
-		System.out.println(i.execute("b = a - x"));
-	}
 }
