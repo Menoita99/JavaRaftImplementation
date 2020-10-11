@@ -370,13 +370,11 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		switch (mode) {
 		case FOLLOWER: 
-			System.out.println("Im follower and Received request from client. Sent leader address");
 			return new ServerResponse(leaderId, null);
 		case CANDIDATE:
 			//TODO
 			return null;
 		case LEADER:
-			System.out.println("Im leader and Received request from client");
 			return leaderResponse(string, commandID);
 		}
 		return null;
