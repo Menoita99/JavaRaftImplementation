@@ -27,6 +27,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import javax.management.RuntimeErrorException;
+
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
 import com.raft.models.Log;
@@ -175,7 +177,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				if( clusterLeader.size() <= i || clusterLeader.get(i) == null )
 					clusterLeader.add(i,(LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
 			} catch (MalformedURLException | RemoteException | NotBoundException e) {
-				e.printStackTrace();
+//				e.printStackTrace();
 				continue;
 			}
 		}
@@ -411,6 +413,16 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 					}
 				}
 			}
+			
+			Log log = new Log(state.getLastLog().getIndex()+1, state.getCurrentTerm(), command, commandID);
+			//Commits log, tries 3 times until send an error
+			for (int i = 0; i < 3; i++) {
+				if(sendAppendEntriesRequest(log))
+					break;
+				else if(i == 2)
+					throw new RuntimeErrorException(new Error(),"[SEVERE] Cound not commit log "+log);
+			}
+			
 
 			try {
 				//executes command and stores the response on the serverResponse and also on the map associated with the clientIP
@@ -425,8 +437,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				serverResponse.setResponse(e);
 				//				e.printStackTrace();
 			}
-			Log log = new Log(state.getLastLog().getIndex()+1, state.getCurrentTerm(), command, commandID);
-			sendAppendEntriesRequest(log);
+			
 
 
 		}
@@ -472,8 +483,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	public boolean sendAppendEntriesRequest(Log entry) {
 		try {
+			state.getLock().lock();
 			if(mode == Mode.LEADER) {
-				state.getLock().lock();
 				tryToConnect();
 				long term = state.getCurrentTerm();
 				long prevLogIndex = state.getLastLog().getIndex();

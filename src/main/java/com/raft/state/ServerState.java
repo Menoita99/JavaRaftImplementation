@@ -19,6 +19,7 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * This class represents volatile and non-volatile server state
@@ -29,8 +30,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ServerState implements Serializable{
 	private static final long serialVersionUID = 1L;
 
-//	private static final String STATE_FILE = "src/main/resources/state.conf";
-//	private static final String LOG_FILE = "src/main/resources/log.txt";
+	//	private static final String STATE_FILE = "src/main/resources/state.conf";
+	//	private static final String LOG_FILE = "src/main/resources/log.txt";
 	private  String STATE_FILE = "src/main/resources/state";
 	private  String LOG_FILE = "src/main/resources/log";
 
@@ -55,10 +56,12 @@ public class ServerState implements Serializable{
 	private Interpreter interpreter = new Interpreter();
 
 	private ReentrantLock lock = new ReentrantLock();
-	
+	private ReentrantReadWriteLock persistenceStateLock = new ReentrantReadWriteLock();
+	private ReentrantReadWriteLock logLock = new ReentrantReadWriteLock();
+
 	public ServerState() throws IOException {
-		//just to test
-		int r = (int)(Math.random()*100);
+		//just to test ( to have 3 different log.txt and state.conf files)
+		int r = (int)(Math.random()*90000);
 		STATE_FILE = STATE_FILE+r+".conf";
 		LOG_FILE = LOG_FILE+r+".txt";
 		init(); 
@@ -78,7 +81,7 @@ public class ServerState implements Serializable{
 		stateProperties.load(new FileInputStream(STATE_FILE));
 		setCurrentTerm(Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0")));
 		setVotedFor(Address.parse((String) stateProperties.getOrDefault("votedFor", new Address("", -1).toFileString())));
-		
+
 		File logFile = new File(LOG_FILE);
 		logFile.createNewFile();
 		logWriter = new PrintWriter(logFile);
@@ -86,17 +89,20 @@ public class ServerState implements Serializable{
 
 
 
-	
+
 	/**
 	 * Set and store's in the hard drive the current term
 	 */
 	public void setCurrentTerm(long currentTerm) {
 		try {
+			persistenceStateLock.writeLock().lock();
 			this.currentTerm = currentTerm;
 			stateProperties.setProperty("currentTerm", currentTerm+"");
 			stateProperties.store(new FileOutputStream(STATE_FILE), null);
 		} catch (IOException e) {
 			e.printStackTrace();
+		}finally {
+			persistenceStateLock.writeLock().unlock();
 		}
 	}
 
@@ -108,11 +114,14 @@ public class ServerState implements Serializable{
 	 */
 	public void setVotedFor(Address votedFor) {
 		try {
+			persistenceStateLock.writeLock().lock();
 			this.votedFor = votedFor;
 			stateProperties.setProperty("votedFor", votedFor.toFileString());
 			stateProperties.store(new FileOutputStream(STATE_FILE), null);
 		} catch (IOException e) {
 			e.printStackTrace();
+		}finally {
+			persistenceStateLock.writeLock().unlock();
 		}
 	}
 
@@ -124,11 +133,16 @@ public class ServerState implements Serializable{
 	 * Appends a new entry in the logs file and set's last log 
 	 */
 	public void appendLog(Log log) {
-		lastLog = log;
-		if(currentTerm != log.getTerm())
-			setCurrentTerm(log.getTerm());
-		logWriter.println(log.toFileString());
-		logWriter.flush();
+		try {
+			logLock.writeLock().lock();
+			lastLog = log;
+			if(currentTerm != log.getTerm())
+				setCurrentTerm(log.getTerm());
+			logWriter.println(log.toFileString());
+			logWriter.flush();
+		}finally {
+			logLock.writeLock().unlock();
+		}
 	}
 
 
@@ -148,12 +162,15 @@ public class ServerState implements Serializable{
 			return false;
 		if(term<lastLog.getTerm() || index<lastLog.getIndex()) {
 			try(Scanner s = new Scanner(new File(LOG_FILE))){
+				logLock.readLock().lock();
 				//TODO
 				s.skip("");
 				String line = s.nextLine();
 				return line.isBlank() ? false : true;
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
+			}finally {
+				logLock.readLock().unlock();
 			}
 			return false;
 		}
@@ -170,6 +187,7 @@ public class ServerState implements Serializable{
 	 */
 	public void override(Log log) {
 		try {
+			logLock.writeLock().lock();
 			File temp = File.createTempFile("temp", ".tmp");
 			File logFile = new File(LOG_FILE);
 			try(PrintWriter pw = new PrintWriter(temp)) {
@@ -184,6 +202,8 @@ public class ServerState implements Serializable{
 			}
 		}catch (IOException e) {
 			e.printStackTrace();
+		}finally {
+			logLock.writeLock().unlock();
 		}
 	}
 }
