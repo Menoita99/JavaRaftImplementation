@@ -125,6 +125,8 @@ public class Client {
 				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
 				response = look_up.execute("", generateCommandID(clientID));
 			}
+			//if client has sends a message, reset try count,if try count = nº of clusters will stop trying to connect trying
+			tryCount = -1;
 			
 		} catch (NotBoundException | MalformedURLException | RemoteException e) {
 			e.printStackTrace();
@@ -136,7 +138,7 @@ public class Client {
 
 	
 	/**
-	 * 
+	 * Request a message to server
 	 * @param command
 	 * @return
 	 * @throws RemoteException
