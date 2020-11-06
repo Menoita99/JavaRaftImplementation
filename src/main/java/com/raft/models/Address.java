@@ -32,7 +32,6 @@ public class Address implements Serializable{
 	 * @return returns the Address parsed or null if it could not parse the given string
 	 */
 	public static Address parse(String s) {
-		System.out.println(s!= null);
 		if(s != null ) {
 			if(!s.isBlank()) {
 				String[] splited = s.split(";");

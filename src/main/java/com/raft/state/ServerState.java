@@ -86,7 +86,6 @@ public class ServerState implements Serializable{
 		new File(STATE_FILE).createNewFile();
 		stateProperties.load(new FileInputStream(STATE_FILE));
 		setCurrentTerm(Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0")));
-		setVotedFor(Address.parse((String) stateProperties.getOrDefault("votedFor", new Address("", -1).toFileString())));
 
 		File logFile = new File(LOG_FILE);
 		logFile.createNewFile();
