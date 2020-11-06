@@ -6,7 +6,7 @@ import java.util.List;
 
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
-import com.raft.models.Log;
+import com.raft.models.Entry;
 /**
  * Class the represents the behaviour of a server when it is in Follower mode
  * @author RuiMenoita
@@ -25,7 +25,7 @@ public interface FollowerBehaviour extends Remote{
 	 * @return AppendResponse
 	 * @throws RemoteException extends Remote Interface
 	 */
-	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex,long prevLogTerm,List<Log> entries,long leaderCommit) throws RemoteException;
+	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex,long prevLogTerm,List<Entry> entries,long leaderCommit) throws RemoteException;
 
 	
 	

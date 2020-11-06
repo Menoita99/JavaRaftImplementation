@@ -13,9 +13,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Timer;
@@ -27,12 +25,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import javax.management.RuntimeErrorException;
-
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
-import com.raft.models.Log;
-import com.raft.models.Operation;
+import com.raft.models.Entry;
 import com.raft.models.ServerResponse;
 import com.raft.models.VoteResponse;
 import com.raft.state.Mode;
@@ -51,6 +46,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private static final long serialVersionUID = 1L;
 
 	private ExecutorService  executor;
+
+	private EntryManager entityManager;
 
 	//Server State
 	private ServerState state;
@@ -73,8 +70,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private Address leaderId;
 	private Address selfId;
 
-	private Map<String, Operation> operationsMap = new HashMap<String, Operation>();
-
 
 	/**
 	 * This constructor must only be used to test
@@ -84,6 +79,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		readIni(p);
 		registServer();
 		tryToConnect();
+		entityManager = new EntryManager(this);
 		heartBeatSender = new HeartBeatSender(this);
 		heartBeatSender.start();
 		restartTimer();
@@ -99,6 +95,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		readIni(null);
 		registServer();
 		tryToConnect();
+		entityManager = new EntryManager(this);
 		heartBeatSender = new HeartBeatSender(this);
 		heartBeatSender.start();
 		restartTimer();
@@ -122,6 +119,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		String[] clusterString = p.getProperty("cluster").split(";");
 		clusterArray = new Address[clusterString.length];
+
 		for (int i = 0; i < clusterString.length; i++) {
 			clusterLeader.add(null);
 			clusterFollow.add(null);
@@ -137,8 +135,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		String[] timeOutInterval = p.getProperty("timeOutInterval").trim().split(",");
 		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
-
-		leaderId = new Address(p.getProperty("liderIp"), Integer.parseInt(p.getProperty("liderPort")));
 	}
 
 
@@ -169,20 +165,29 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	/**
 	 * Looks for another servers
 	 */
-	private void tryToConnect() {
+	public void tryToConnect() {
 		for (int i = 0; i < clusterArray.length; i++) {
-			try {
-				if( clusterFollow.size() <= i || clusterFollow.get(i) == null )
+
+			if( clusterFollow.size() < i || clusterFollow.get(i) == null ) {
+				try {
+					clusterFollow.remove(i);
 					clusterFollow.add(i,(FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow"));
-				if( clusterLeader.size() <= i || clusterLeader.get(i) == null )
-					clusterLeader.add(i,(LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
-			} catch (MalformedURLException | RemoteException | NotBoundException e) {
-//				e.printStackTrace();
-				continue;
+				} catch (MalformedURLException | RemoteException | NotBoundException e) {
+					clusterFollow.add(i,null);
+				}
 			}
+
+			if( clusterLeader.size() < i || clusterLeader.get(i) == null ) {
+				try {
+					clusterLeader.remove(i);
+					clusterLeader.add(i,(LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
+				} catch (MalformedURLException | RemoteException | NotBoundException e) {
+					clusterLeader.add(i,null);
+				}
+			}
+
 		}
 	}
-
 
 
 
@@ -207,9 +212,9 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		if (term < this.state.getCurrentTerm()) {
 			return resposta;
 		}else {
-			if (this.state.getVotedFor() == null || this.state.getVotedFor().equals(candidateId)
-					&& this.state.getCommitIndex() == lastLogIndex && this.state.getCurrentTerm() == lastLogTerm) {
+			if (this.state.getVotedFor() == null || this.state.getVotedFor().equals(candidateId)&& this.state.getCommitIndex() == lastLogIndex && this.state.getCurrentTerm() == lastLogTerm) {
 				resposta.setVoteGranted(true);
+				state.setVotedFor(candidateId);
 			}
 		}
 		return resposta;
@@ -231,30 +236,33 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @throws RemoteException extends Remote Interface
 	 */
 	@Override
-	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Log> entries, long leaderCommit) throws RemoteException {
+	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Entry> entries, long leaderCommit) throws RemoteException {
 		restartTimer();
-		this.leaderId = leaderId;
+		if(leaderId.equals(selfId))
+			return null;
+
 		shouldBecameFollower(term);
+		this.leaderId = leaderId;
 
 		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
-		//		boolean hasPreviousLog = prevLogIndex == state.getLastLog().getIndex() && prevLogTerm == state.getLastLog().getTerm();
 
 		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 
-			for (Log log : entries) {
-				Log lastLog = state.getLastLog();
-				if((log.getIndex() == lastLog.getIndex() && log.getTerm() != lastLog.getTerm()) || log.getIndex()<lastLog.getIndex())
-					if(mode == Mode.FOLLOWER)
-						state.override(log);
-				if(log.getIndex()>lastLog.getIndex()) {
-					state.appendLog(log);
+			for (Entry entry : entries) {
+				if(entry != null) {
+					Entry lastLog = state.getLastEntry();
+					if((entry.getIndex() == lastLog.getIndex() && entry.getTerm() != lastLog.getTerm()) || entry.getIndex()<lastLog.getIndex())
+						if(mode == Mode.FOLLOWER)
+							state.override(entry);
+					if(entry.getIndex()>lastLog.getIndex())
+						state.addEntry(entry);
 				}
 			}
 
 			if(leaderCommit > state.getCommitIndex())
-				state.setCommitIndex(Math.min(leaderCommit, state.getLastLog().getIndex()));
+				state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
 		}
 		return new AppendResponse(state.getCurrentTerm(), hasPreviousLog);
 	}
@@ -286,21 +294,24 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	public void startElection() {
 		if(mode == Mode.FOLLOWER || mode == Mode.CANDIDATE) {
+			timer.cancel();
+			tryToConnect();
 			System.out.println("Starting Election");
 
 			//Transition to candidate state
 			mode = Mode.CANDIDATE;
 			this.state.setCurrentTerm(this.state.getCurrentTerm() +1);
 			this.state.setVotedFor(this.selfId);
-			restartTimer();
 
 			//Send RequestVote to every other Server
 			ArrayList<Future<VoteResponse>> listFuture = new ArrayList<>();
 			for(LeaderBehaviour clstr : clusterLeader) {
-				Future<VoteResponse> resp = executor.submit(()-> clstr.requestVote(this.state.getCurrentTerm(), selfId, this.state.getLastLog().getIndex(), this.state.getLastLog().getTerm()));
-				listFuture.add(resp);
+				if(clstr != null) {
+					Future<VoteResponse> resp = executor.submit(()-> clstr.requestVote(this.state.getCurrentTerm(), selfId, this.state.getLastEntry().getIndex(), this.state.getLastEntry().getTerm()));
+					listFuture.add(resp);
+				}
 			}
-			int votes = 0;
+			int votes = 1;
 
 			for(Future<VoteResponse> ftr : listFuture){
 				try {
@@ -318,10 +329,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				getLeaderState().reset(this);
 				leaderId = selfId;
 				heartBeatSender.goOn();
-				restartTimer();
-			}else if((double) votes / (double) clusterArray.length == 0.5) {
+			}else if((double) votes / (double) clusterArray.length == 0.5){
 				startElection();
 			}
+			restartTimer();
 		}
 	}
 
@@ -341,7 +352,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
 		timer.schedule(new TimerTask() {
 			public void run() {
-				//startElection();
+				//				startElection();
 			}
 		}, timeOut);
 	}
@@ -361,25 +372,16 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	@Override
 	public ServerResponse execute(String string, String commandID) throws RemoteException{
-		//TEMP
-		if(selfId.getPort() == 1000) {
-			this.mode=Mode.LEADER;
-			getLeaderState().reset(this);
-		}else {
-			this.mode=Mode.FOLLOWER;
-		}
-		//TEMP
-
 		switch (mode) {
 		case FOLLOWER: 
 			return new ServerResponse(leaderId, null);
 		case CANDIDATE:
-			//TODO
-			return null;
+			return new ServerResponse(null, null);
 		case LEADER:
 			return leaderResponse(string, commandID);
+		default:
+			throw new IllegalArgumentException("Unexpected value: " + mode);
 		}
-		return null;
 	}
 
 
@@ -396,51 +398,31 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		ServerResponse serverResponse;
 
 		if(command==null || command.isBlank())
-			serverResponse = new ServerResponse(leaderId,  null);
+			serverResponse = new ServerResponse(selfId,  null);
 		else {
-			serverResponse = new ServerResponse(leaderId,  command);
+			serverResponse = new ServerResponse(selfId,  command);
 
-			//commandID format is 'clientIP:timestamp'
 			String clientIP = commandID.split(":")[0];
-
 			//if there already is an entry from the client requesting command, and this command has already been executed, directly sends response
 			//which had been stored when it was originally executed
-			for (String key : operationsMap.keySet()) {
+			for (String key : state.getInterpreter().getOperationsMap().keySet()) {
 				if(key.equals(clientIP)) {
-					if (operationsMap.get(key).getOperationID().equals(commandID)) {
-						serverResponse.setResponse(operationsMap.get(key).getResponse());
+					if (state.getInterpreter().getOperationsMap().get(key).getOperationID().equals(commandID)) {
+						serverResponse.setResponse(state.getInterpreter().getOperationsMap().get(key).getResponse());
 						return serverResponse;
 					}
 				}
 			}
 			
-			Log log = new Log(state.getLastLog().getIndex()+1, state.getCurrentTerm(), command, commandID);
-			//Commits log, tries 3 times until send an error
-			for (int i = 0; i < 3; i++) {
-				if(sendAppendEntriesRequest(log))
-					break;
-				else if(i == 2)
-					throw new RuntimeErrorException(new Error(),"[SEVERE] Cound not commit log "+log);
-			}
-			
-
+			Entry entry = state.createEntry(command, commandID);
+			entityManager.submitEntry(entry);
 			try {
-				//executes command and stores the response on the serverResponse and also on the map associated with the clientIP
-				Object response = state.getInterpreter().execute(command);
-				serverResponse.setResponse(response);
-				if (operationsMap.containsKey(clientIP))  System.out.println("Updated entry on map for client: " + clientIP);
-				else  System.out.println("Created new entry on map for client: " + clientIP);
-				operationsMap.put(clientIP, new Operation(commandID, response));
-				System.out.println(operationsMap.toString());
-
-			}catch (Exception e) {
+				serverResponse.setResponse(state.getInterpreter().getCommandResult(commandID, 999999));
+			} catch (TimeoutException | InterruptedException e) {
 				serverResponse.setResponse(e);
-				//				e.printStackTrace();
 			}
-			
-
-
 		}
+		System.out.println(serverResponse);
 		return serverResponse;
 	}
 
@@ -473,72 +455,4 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	}
 
 
-
-
-
-	/**
-	 * TODO talk about -> futures , lock, list position
-	 * @param entry
-	 * @return returns true if entry was committed otherwise returns false
-	 */
-	public boolean sendAppendEntriesRequest(Log entry) {
-		try {
-			state.getLock().lock();
-			if(mode == Mode.LEADER) {
-				tryToConnect();
-				long term = state.getCurrentTerm();
-				long prevLogIndex = state.getLastLog().getIndex();
-				long prevLogTerm = state.getLastLog().getTerm();
-				long leaderCommit = state.getCommitIndex();
-
-				List<Future<AppendResponse>> futures = new ArrayList<>(clusterFollow.size());
-				for (int i = 0; i < clusterFollow.size(); i++) {
-					FollowerBehaviour follower = clusterFollow.get(i);
-					if(follower != null) {
-						List<Log> entries = new ArrayList<>();
-						entries.add(entry);
-						futures.add(i,executor.submit(()->follower.appendEntries(term, selfId, prevLogIndex, prevLogTerm,entries, leaderCommit)));
-					}
-				}
-
-				List<AppendResponse> responses = new ArrayList<>(clusterFollow.size());
-				for (int i = 0; i < futures.size(); i++) {
-					try {
-						Future<AppendResponse> future = futures.get(i);
-						if(future != null)
-							responses.add(i,future.get(WAIT_FOR_RESPONSE_TIME_OUT, TimeUnit.MILLISECONDS));
-					} catch (InterruptedException | ExecutionException e) {
-						e.printStackTrace();
-					} catch (TimeoutException e) {
-						//TODO
-						if(entry != null)
-							System.out.println("TODO RETRY UNTIL IT WORK");
-					}
-				}
-
-				int commited = 0;
-				for (int i = 0; i < responses.size(); i++) {
-					AppendResponse response = responses.get(i);
-					if(response != null) {
-						long appendedIndex = getLeaderState().getNextIndex().get(clusterArray[i]);
-						if(response.isSuccess()) {
-							getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex+1);
-							getLeaderState().getMatchIndex().put(clusterArray[i], appendedIndex);
-							commited++;
-						}else {
-							getLeaderState().getNextIndex().put(clusterArray[i], appendedIndex-1 < 0 ? 0 : appendedIndex-1);
-						}	
-					}
-				}
-
-				if (commited > clusterArray.length/2 && entry != null) {
-					state.setCommitIndex(entry.getIndex());
-					return true;
-				}
-			}
-			return false;
-		}finally {
-			state.getLock().unlock();
-		}
-	}
 }

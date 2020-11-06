@@ -7,12 +7,15 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import java.util.Scanner;
+import java.util.Vector;
 
 import com.raft.interpreter.Interpreter;
 import com.raft.models.Address;
-import com.raft.models.Log;
+import com.raft.models.Entry;
 
 import lombok.AccessLevel;
 import lombok.Data;
@@ -46,18 +49,20 @@ public class ServerState implements Serializable{
 	//Stable state
 	private long currentTerm = 0;
 	private Address votedFor;
-	@Setter(value = AccessLevel.NONE)
-	private Log lastLog = new Log(0,0,null,null);
+	private Vector<Entry> log = new Vector<>();
 
 	// Volatile state
 	private long commitIndex = 0;
-	private long lastApplied = 0;
-
-	private Interpreter interpreter = new Interpreter();
+	private Entry lastEntry = new Entry(0,0,null,null);
 
 	private ReentrantLock lock = new ReentrantLock();
 	private ReentrantReadWriteLock persistenceStateLock = new ReentrantReadWriteLock();
 	private ReentrantReadWriteLock logLock = new ReentrantReadWriteLock();
+
+	private Interpreter interpreter = new Interpreter();
+
+
+
 
 	public ServerState() throws IOException {
 		//just to test ( to have 3 different log.txt and state.conf files)
@@ -129,16 +134,83 @@ public class ServerState implements Serializable{
 
 
 
+	public Entry createEntry(String command, String commandID) {
+		try {
+			lock.lock();
+			Entry entry = new Entry( lastEntry.getIndex()+1, currentTerm, command, commandID);
+			lastEntry = entry;
+			log.add(entry);
+			return entry;
+		}finally {
+			lock.unlock();
+		}
+	}
+
+
+
+
+
+
+	public void setCommitIndex(long index) {
+		try {
+			lock.lock();
+			if(commitIndex>index)
+				return;
+
+			if(lastEntry.getIndex()<index) 
+				throw new IllegalStateException("Last log index "+lastEntry.getIndex()+" can't be lower then commited log "+index);
+
+			List<Entry> commitedEntries = new ArrayList<>();
+			for (Entry entry : log) {
+				if(entry.getIndex()<=index) {
+					commitedEntries.add(entry);
+					saveEntry(entry);
+				}
+			}
+
+			commitIndex = index;
+			interpreter.submit(commitedEntries);
+			log.removeAll(commitedEntries);
+		}finally {
+			lock.unlock();
+		}
+	}
+
+
+
+
+
+
+
+
+	public void addEntry(Entry entry) {
+		try {
+			lock.lock();
+			if(!log.contains(entry)) {
+				lastEntry = entry;
+				log.add(entry);
+			}
+		}finally {
+			lock.unlock();
+		}
+	}
+
+
+
+
+
+
+
+
 	/**
 	 * Appends a new entry in the logs file and set's last log 
 	 */
-	public void appendLog(Log log) {
+	private void saveEntry(Entry entry) {
 		try {
 			logLock.writeLock().lock();
-			lastLog = log;
-			if(currentTerm != log.getTerm())
-				setCurrentTerm(log.getTerm());
-			logWriter.println(log.toFileString());
+			if(currentTerm != entry.getTerm())
+				setCurrentTerm(entry.getTerm());
+			logWriter.println(entry.toFileString());
 			logWriter.flush();
 		}finally {
 			logLock.writeLock().unlock();
@@ -156,11 +228,11 @@ public class ServerState implements Serializable{
 	 * @return true if there is this log in memorr or false otherwise
 	 */
 	public boolean hasLog(long term, long index) {
-		if(term==lastLog.getTerm() && index==lastLog.getIndex()) 
+		if(term==lastEntry.getTerm() && index==lastEntry.getIndex()) 
 			return true;
-		if(term>lastLog.getTerm() && index>lastLog.getIndex()) 
+		if(term>lastEntry.getTerm() && index>lastEntry.getIndex()) 
 			return false;
-		if(term<lastLog.getTerm() || index<lastLog.getIndex()) {
+		if(term<lastEntry.getTerm() || index<lastEntry.getIndex()) {
 			try(Scanner s = new Scanner(new File(LOG_FILE))){
 				logLock.readLock().lock();
 				//TODO
@@ -181,29 +253,82 @@ public class ServerState implements Serializable{
 
 
 
+
+
+
 	/**
 	 * Overrides the given log in memory
-	 * @param log log to be written
+	 * @param entry log to be written
 	 */
-	public void override(Log log) {
-		try {
-			logLock.writeLock().lock();
-			File temp = File.createTempFile("temp", ".tmp");
-			File logFile = new File(LOG_FILE);
-			try(PrintWriter pw = new PrintWriter(temp)) {
-				try(Scanner s = new Scanner(logFile)){
-					while (s.hasNext()) {
-						String line = s.nextLine();
-						//TODO
-						pw.println(line);
-					}
-					temp.renameTo(logFile);
-				}
+	public void override(Entry entry) {
+		log.removeIf((oldEntry) -> oldEntry.getIndex() == entry.getIndex());
+		log.add(entry);
+	}
+
+
+
+
+	public List<Entry> getEntriesSince(long nextIndex) {
+		List<Entry> entries = new ArrayList<>();
+
+		lock.lock();
+
+		//if log has all requested entries in memory
+		log.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
+		if(!log.isEmpty() && log.get(0).getIndex() <= nextIndex) {
+			int logIndex = (int) (nextIndex - log.get(0).getIndex());
+			entries.addAll(log.subList(logIndex-1, log.size()));
+			return entries;
+		}
+
+		lock.unlock();
+
+		try(Scanner s = new Scanner(new File(LOG_FILE))){
+			logLock.readLock().lock();
+			while(s.hasNext()) {
+				Entry e =  Entry.fromString(s.nextLine());
+				if(e.getIndex()>=nextIndex)
+					entries.add(e);
 			}
-		}catch (IOException e) {
+		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}finally {
-			logLock.writeLock().unlock();
+			logLock.readLock().unlock();
 		}
+
+		entries.addAll(log);
+		return entries;
 	}
+
+
+
+
+	public Entry getEntry(long index) {
+		if(index <= 0)
+			return new Entry(0,0,null,null);
+
+		lock.lock();
+
+		for (Entry entry : log) 
+			if(entry.getIndex() == index)
+				return entry;
+
+		lock.unlock();
+
+		try(Scanner s = new Scanner(new File(LOG_FILE))){
+			logLock.readLock().lock();
+			while(s.hasNext()) {
+				Entry e =  Entry.fromString(s.nextLine());
+				if(e.getIndex() == index)
+					return e;
+			}
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}finally {
+			logLock.readLock().unlock();
+		}
+
+		return null;
+	}
+
 }

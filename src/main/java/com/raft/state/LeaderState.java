@@ -28,7 +28,7 @@ public class LeaderState implements Serializable{
 		matchIndex.clear();
 		Address[] servers = s.getClusterArray();
 		for (int i = 0; i < servers.length; i++) {
-			nextIndex.put(servers[i], s.getState().getLastLog().getIndex()+1);
+			nextIndex.put(servers[i], s.getState().getLastEntry().getIndex()+1);
 			matchIndex.put(servers[i], 0L);
 		}
 	}

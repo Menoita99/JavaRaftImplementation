@@ -16,7 +16,7 @@ public class HeartBeatSender extends Thread {
 	public void run() {
 		while(isRunning) {
 			if(isLeader()) {
-				server.sendAppendEntriesRequest(null);
+				server.getEntityManager().submitEntry(null);;
 				try {
 					sleep(Server.HEARTBEAT_TIME_OUT);
 				} catch (InterruptedException e) {
