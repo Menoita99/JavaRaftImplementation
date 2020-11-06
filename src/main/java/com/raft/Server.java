@@ -237,34 +237,34 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	@Override
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Entry> entries, long leaderCommit) throws RemoteException {
-		restartTimer();
-		if(leaderId.equals(selfId))
-			return null;
+			restartTimer();
+			if(leaderId.equals(selfId))
+				return null;
+			
+			shouldBecameFollower(term);
+			this.leaderId = leaderId;
 
-		shouldBecameFollower(term);
-		this.leaderId = leaderId;
+			boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
 
-		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
+			if(hasPreviousLog){
+				//sorts entries from log with minor index to the log with the bigger index
+				entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 
-		if(hasPreviousLog){
-			//sorts entries from log with minor index to the log with the bigger index
-			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
-
-			for (Entry entry : entries) {
-				if(entry != null) {
-					Entry lastLog = state.getLastEntry();
-					if((entry.getIndex() == lastLog.getIndex() && entry.getTerm() != lastLog.getTerm()) || entry.getIndex()<lastLog.getIndex())
-						if(mode == Mode.FOLLOWER)
-							state.override(entry);
-					if(entry.getIndex()>lastLog.getIndex())
-						state.addEntry(entry);
+				for (Entry entry : entries) {
+					if(entry != null) {
+						Entry lastLog = state.getLastEntry();
+						if((entry.getIndex() == lastLog.getIndex() && entry.getTerm() != lastLog.getTerm()) || entry.getIndex()<lastLog.getIndex())
+							if(mode == Mode.FOLLOWER)
+								state.override(entry);
+						if(entry.getIndex()>lastLog.getIndex())
+							state.addEntry(entry);
+					}
 				}
-			}
 
-			if(leaderCommit > state.getCommitIndex())
-				state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
-		}
-		return new AppendResponse(state.getCurrentTerm(), hasPreviousLog);
+				if(leaderCommit > state.getCommitIndex())
+					state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
+			}
+			return new AppendResponse(state.getCurrentTerm(), hasPreviousLog);
 	}
 
 
@@ -413,11 +413,11 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 					}
 				}
 			}
-			
+
 			Entry entry = state.createEntry(command, commandID);
 			entityManager.submitEntry(entry);
 			try {
-				serverResponse.setResponse(state.getInterpreter().getCommandResult(commandID, 999999));
+				serverResponse.setResponse(state.getInterpreter().getCommandResult(commandID, 999999999));
 			} catch (TimeoutException | InterruptedException e) {
 				serverResponse.setResponse(e);
 			}

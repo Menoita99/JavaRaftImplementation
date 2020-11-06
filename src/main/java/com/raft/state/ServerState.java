@@ -54,6 +54,7 @@ public class ServerState implements Serializable{
 	// Volatile state
 	private long commitIndex = 0;
 	private Entry lastEntry = new Entry(0,0,null,null);
+	private Entry lastAplied = new Entry(0,0,null,null);
 
 	private ReentrantLock lock = new ReentrantLock();
 	private ReentrantReadWriteLock persistenceStateLock = new ReentrantReadWriteLock();
@@ -154,6 +155,7 @@ public class ServerState implements Serializable{
 	public void setCommitIndex(long index) {
 		try {
 			lock.lock();
+
 			if(commitIndex>index)
 				return;
 
@@ -165,6 +167,8 @@ public class ServerState implements Serializable{
 				if(entry.getIndex()<=index) {
 					commitedEntries.add(entry);
 					saveEntry(entry);
+					if(lastAplied.getIndex()<entry.getIndex())
+						lastAplied=entry;
 				}
 			}
 
@@ -225,28 +229,10 @@ public class ServerState implements Serializable{
 	 * Verifies if a certain log with term and index given was already been stored
 	 * @param term certain log term
 	 * @param index certain log term
-	 * @return true if there is this log in memorr or false otherwise
+	 * @return true if there is this log in memory or false otherwise
 	 */
 	public boolean hasLog(long term, long index) {
-		if(term==lastEntry.getTerm() && index==lastEntry.getIndex()) 
-			return true;
-		if(term>lastEntry.getTerm() && index>lastEntry.getIndex()) 
-			return false;
-		if(term<lastEntry.getTerm() || index<lastEntry.getIndex()) {
-			try(Scanner s = new Scanner(new File(LOG_FILE))){
-				logLock.readLock().lock();
-				//TODO
-				s.skip("");
-				String line = s.nextLine();
-				return line.isBlank() ? false : true;
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
-			}finally {
-				logLock.readLock().unlock();
-			}
-			return false;
-		}
-		return false;
+		return index > lastEntry.getIndex() ? false : getEntry(index).getTerm() == term;
 	}
 
 
@@ -271,17 +257,18 @@ public class ServerState implements Serializable{
 	public List<Entry> getEntriesSince(long nextIndex) {
 		List<Entry> entries = new ArrayList<>();
 
-		lock.lock();
-
-		//if log has all requested entries in memory
-		log.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
-		if(!log.isEmpty() && log.get(0).getIndex() <= nextIndex) {
-			int logIndex = (int) (nextIndex - log.get(0).getIndex());
-			entries.addAll(log.subList(logIndex-1, log.size()));
-			return entries;
+		try {
+			lock.lock();
+			//if log has all requested entries in memory
+			log.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
+			if(!log.isEmpty() && log.get(0).getIndex() <= nextIndex) {
+				int logIndex = (int) (nextIndex - log.get(0).getIndex());
+				entries.addAll(log.subList(logIndex-1, log.size()));
+				return entries;
+			}
+		}finally {
+			lock.unlock();
 		}
-
-		lock.unlock();
 
 		try(Scanner s = new Scanner(new File(LOG_FILE))){
 			logLock.readLock().lock();
@@ -304,16 +291,25 @@ public class ServerState implements Serializable{
 
 
 	public Entry getEntry(long index) {
+		if(index>lastEntry.getIndex())
+			return null;
+
+		if(lastEntry.getIndex() == index ) return lastEntry;
+		if(lastAplied.getIndex() == index) return lastAplied;
+
 		if(index <= 0)
 			return new Entry(0,0,null,null);
 
-		lock.lock();
+		try {
+			lock.lock();
 
-		for (Entry entry : log) 
-			if(entry.getIndex() == index)
-				return entry;
+			for (Entry entry : log) 
+				if(entry.getIndex() == index)
+					return entry;
+		}finally {
+			lock.unlock();
+		}
 
-		lock.unlock();
 
 		try(Scanner s = new Scanner(new File(LOG_FILE))){
 			logLock.readLock().lock();
@@ -330,5 +326,4 @@ public class ServerState implements Serializable{
 
 		return null;
 	}
-
 }

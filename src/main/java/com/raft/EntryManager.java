@@ -62,8 +62,8 @@ public class EntryManager {
 				
 				server.getState().getLock().lock();
 				long term = server.getState().getCurrentTerm();
-				long prevLogIndex = entries.isEmpty() ? server.getState().getLastEntry().getIndex() : entries.get(0).getIndex()-1;
-				long prevLogTerm = entries.isEmpty() ? server.getState().getLastEntry().getTerm() : entries.get(0).getTerm();
+				long prevLogIndex =	server.getState().getLastAplied().getIndex();
+				long prevLogTerm = server.getState().getLastAplied().getTerm();
 				long leaderCommit = server.getState().getCommitIndex();
 				server.getState().getLock().unlock();
 
@@ -75,6 +75,7 @@ public class EntryManager {
 						futures.add(executor.submit(()->follower.appendEntries(term, server.getSelfId(), prevLogIndex, prevLogTerm,entries, leaderCommit)));
 					else 
 						futures.add(null);
+				
 				
 				for (Future<AppendResponse> future : futures)  
 					if(future != null)
@@ -151,13 +152,13 @@ public class EntryManager {
 		 
 		private void resendTo(FollowerBehaviour follower, Address address) {
 			long nextIndex = server.getLeaderState().getNextIndex().get(address);
-			Entry prevEntry = server.getState().getEntry(nextIndex);
+			Entry prevEntry = server.getState().getEntry(nextIndex-1);
 			List<Entry> entries = server.getState().getEntriesSince(nextIndex);
 			
 			server.getState().getLock().lock();
 			long term = server.getState().getCurrentTerm();
 			long prevLogIndex = prevEntry.getIndex();
-			long prevLogTerm = entries.isEmpty() ? server.getState().getLastEntry().getTerm() : entries.get(0).getTerm();
+			long prevLogTerm = prevEntry.getTerm();
 			long leaderCommit = server.getState().getCommitIndex();
 			server.getState().getLock().unlock();
 			
