@@ -41,7 +41,7 @@ import lombok.Setter;
 public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 	public static final int WAIT_FOR_RESPONSE_TIME_OUT = 250;
-	public static final int HEARTBEAT_TIME_OUT = 100;
+	public int heartbeatTimeOut;
 
 	private static final long serialVersionUID = 1L;
 
@@ -118,7 +118,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		String[] clusterString = p.getProperty("cluster").split(";");
 		clusterArray = new Address[clusterString.length];
-
+		heartbeatTimeOut = Integer.parseInt(p.getProperty("heartbeatTimeOut"));
 		for (int i = 0; i < clusterString.length; i++) {
 			clusterLeader.add(null);
 			clusterFollow.add(null);
