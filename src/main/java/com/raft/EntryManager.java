@@ -70,7 +70,7 @@ public class EntryManager {
 				List<Future<AppendResponse>> futures = new ArrayList<>();
 				List<AppendResponse> responses = new ArrayList<>();
 
-				for (FollowerBehaviour follower : server.getClusterFollow()) 
+				for (FollowerBehaviour follower : server.getClusterFollowBehaviour()) 
 					if(follower != null) 
 						futures.add(executor.submit(()->follower.appendEntries(term, server.getSelfId(), prevLogIndex, prevLogTerm,entries, leaderCommit)));
 					else 
@@ -100,6 +100,7 @@ public class EntryManager {
 		int commited = 1;
 		for (int i = 0; i < responses.size(); i++) {
 			AppendResponse response = responses.get(i);
+			
 			if(response != null && !entries.isEmpty()) {
 				entries.sort((o1,o2) -> (int)o1.getIndex()-(int)o2.getIndex());
 
@@ -112,7 +113,7 @@ public class EntryManager {
 					commited++;
 				}else {
 					server.getLeaderState().getNextIndex().put(replicaAddress, appendedIndex-1 < 0 ? 0 : appendedIndex-1);
-					resender.submitResend(server.getClusterFollow().get(i),replicaAddress);
+					resender.submitResend(server.getClusterFollowBehaviour().get(i),replicaAddress);
 				}	
 			}
 		}

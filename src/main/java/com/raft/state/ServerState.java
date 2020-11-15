@@ -137,7 +137,7 @@ public class ServerState implements Serializable{
 	public Entry createEntry(String command, String commandID) {
 		try {
 			lock.lock();
-			Entry entry = new Entry( lastEntry.getIndex()+1, currentTerm, command, commandID);
+			Entry entry = new Entry(lastEntry.getIndex()+1, currentTerm, command, commandID);
 			lastEntry = entry;
 			log.add(entry);
 			return entry;

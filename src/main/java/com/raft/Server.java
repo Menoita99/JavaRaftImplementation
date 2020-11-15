@@ -58,8 +58,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private int minTimeOut;
 
 	//Reference to the cluster servers to make RPC (remote procedure call)
-	private ArrayList<FollowerBehaviour> clusterFollow = new ArrayList<>();
-	private ArrayList<LeaderBehaviour> clusterLeader = new ArrayList<>();
+	private ArrayList<FollowerBehaviour> clusterFollowBehaviour = new ArrayList<>();
+	private ArrayList<LeaderBehaviour> clusterLeaderBehaviour = new ArrayList<>();
 	private Address[] clusterArray;
 
 	private HeartBeatSender heartBeatSender;
@@ -120,8 +120,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		clusterArray = new Address[clusterString.length];
 
 		for (int i = 0; i < clusterString.length; i++) {
-			clusterLeader.add(null);
-			clusterFollow.add(null);
+			clusterLeaderBehaviour.add(null);
+			clusterFollowBehaviour.add(null);
 		}
 
 		for (int i = 0; i < clusterString.length; i++) {
@@ -167,21 +167,21 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	public void tryToConnect() {
 		for (int i = 0; i < clusterArray.length; i++) {
 
-			if( clusterFollow.size() < i || clusterFollow.get(i) == null ) {
+			if( clusterFollowBehaviour.size() < i || clusterFollowBehaviour.get(i) == null ) {
 				try {
-					clusterFollow.add(i,(FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow"));
-					clusterFollow.remove(i+1);
+					clusterFollowBehaviour.add(i,(FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow"));
+					clusterFollowBehaviour.remove(i+1);
 				} catch (MalformedURLException | RemoteException | NotBoundException e) {
-					clusterFollow.add(i,null);
+					clusterFollowBehaviour.add(i,null);
 				}
 			}
 
-			if( clusterLeader.size() < i || clusterLeader.get(i) == null ) {
+			if( clusterLeaderBehaviour.size() < i || clusterLeaderBehaviour.get(i) == null ) {
 				try {
-					clusterLeader.add(i,(LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
-					clusterLeader.remove(i+1);
+					clusterLeaderBehaviour.add(i,(LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
+					clusterLeaderBehaviour.remove(i+1);
 				} catch (MalformedURLException | RemoteException | NotBoundException e) {
-					clusterLeader.add(i,null);
+					clusterLeaderBehaviour.add(i,null);
 				}
 			}
 		}
@@ -306,7 +306,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 			//Send RequestVote to every other Server
 			ArrayList<Future<VoteResponse>> listFuture = new ArrayList<>();
-			for(LeaderBehaviour clstr : clusterLeader) {
+			for(LeaderBehaviour clstr : clusterLeaderBehaviour) {
 				if(clstr != null) {
 					Future<VoteResponse> resp = executor.submit(()-> clstr.requestVote(this.state.getCurrentTerm(), selfId, this.state.getLastEntry().getIndex(), this.state.getLastEntry().getTerm()));
 					listFuture.add(resp);

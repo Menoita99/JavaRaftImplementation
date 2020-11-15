@@ -1,5 +1,6 @@
 package com.raft.util;
 
+
 public class ThreadPool {
 	
 	private BlockingQueue<Runnable> tasks = new BlockingQueue<>();
