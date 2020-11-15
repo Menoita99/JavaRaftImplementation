@@ -18,7 +18,7 @@ public class HeartBeatSender extends Thread {
 			try {
 				waitUntilServerIsLeader();
 				server.getEntityManager().submitEntry(null);
-				sleep(Server.HEARTBEAT_TIME_OUT);
+				sleep(server.getHeartbeatTimeOut());
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
