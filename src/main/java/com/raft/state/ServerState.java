@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -24,6 +25,8 @@ import lombok.Setter;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.apache.commons.io.input.ReversedLinesFileReader;
+
 /**
  * This class represents volatile and non-volatile server state
  * @author RuiMenoita
@@ -33,11 +36,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class ServerState implements Serializable{
 	private static final long serialVersionUID = 1L;
 
-	//	private static final String STATE_FILE = "src/main/resources/state.conf";
-	//	private static final String LOG_FILE = "src/main/resources/log.txt";
-	private  String STATE_FILE = "src/main/resources/state";
-	private  String LOG_FILE = "src/main/resources/log";
-
+	public final static String STATE_FILE = "state.conf";
+	public final static String LOG_FILE = "log.txt";
+	
+	private String stateFilePath = "src/main/resources/"+STATE_FILE;
+	private String logFilePath = "src/main/resources/"+LOG_FILE;
 
 	@Setter(value = AccessLevel.NONE)
 	@Getter(value = AccessLevel.NONE)
@@ -53,8 +56,8 @@ public class ServerState implements Serializable{
 
 	// Volatile state
 	private long commitIndex = 0;
-	private Entry lastEntry = new Entry(0,0,null,null);
-	private Entry lastAplied = new Entry(0,0,null,null);
+	private Entry lastEntry;
+	private Entry lastAplied;
 
 	private ReentrantLock lock = new ReentrantLock();
 	private ReentrantReadWriteLock persistenceStateLock = new ReentrantReadWriteLock();
@@ -65,11 +68,9 @@ public class ServerState implements Serializable{
 
 
 
-	public ServerState() throws IOException {
-		//just to test ( to have 3 different log.txt and state.conf files)
-		int r = (int)(Math.random()*90000);
-		STATE_FILE = STATE_FILE+r+".conf";
-		LOG_FILE = LOG_FILE+r+".txt";
+	public ServerState(String rootPath) throws IOException {
+		stateFilePath = rootPath+File.separator+STATE_FILE;
+		logFilePath = rootPath+File.separator+LOG_FILE;
 		init(); 
 	}
 
@@ -83,11 +84,21 @@ public class ServerState implements Serializable{
 	 */
 	private void init() throws IOException, FileNotFoundException {
 		stateProperties = new Properties();
-		new File(STATE_FILE).createNewFile();
-		stateProperties.load(new FileInputStream(STATE_FILE));
+		new File(stateFilePath).createNewFile();
+		stateProperties.load(new FileInputStream(stateFilePath));
+		
 		setCurrentTerm(Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0")));
-
-		File logFile = new File(LOG_FILE);
+		setVotedFor(Address.parse((String) stateProperties.getOrDefault("votedFor", "")));
+		
+		try(ReversedLinesFileReader reader = new ReversedLinesFileReader(new File(logFilePath),Charset.defaultCharset())){
+			Entry last = Entry.fromString(reader.readLine());
+			if(last == null)
+				last = new Entry(0,0,null,null);
+			lastEntry = last;
+			lastAplied = last;
+		}
+		
+		File logFile = new File(logFilePath);
 		logFile.createNewFile();
 		logWriter = new PrintWriter(logFile);
 	}
@@ -103,7 +114,8 @@ public class ServerState implements Serializable{
 			persistenceStateLock.writeLock().lock();
 			this.currentTerm = currentTerm;
 			stateProperties.setProperty("currentTerm", currentTerm+"");
-			stateProperties.store(new FileOutputStream(STATE_FILE), null);
+			stateProperties.store(new FileOutputStream(stateFilePath), null);
+			setVotedFor(null);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}finally {
@@ -121,8 +133,8 @@ public class ServerState implements Serializable{
 		try {
 			persistenceStateLock.writeLock().lock();
 			this.votedFor = votedFor;
-			stateProperties.setProperty("votedFor", votedFor.toFileString());
-			stateProperties.store(new FileOutputStream(STATE_FILE), null);
+			stateProperties.setProperty("votedFor", votedFor == null ? "":votedFor.toFileString());
+			stateProperties.store(new FileOutputStream(stateFilePath), null);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}finally {
@@ -269,7 +281,7 @@ public class ServerState implements Serializable{
 			lock.unlock();
 		}
 
-		try(Scanner s = new Scanner(new File(LOG_FILE))){
+		try(Scanner s = new Scanner(new File(logFilePath))){
 			logLock.readLock().lock();
 			while(s.hasNext()) {
 				Entry e =  Entry.fromString(s.nextLine());
@@ -310,7 +322,7 @@ public class ServerState implements Serializable{
 		}
 
 
-		try(Scanner s = new Scanner(new File(LOG_FILE))){
+		try(Scanner s = new Scanner(new File(logFilePath))){
 			logLock.readLock().lock();
 			while(s.hasNext()) {
 				Entry e =  Entry.fromString(s.nextLine());

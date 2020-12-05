@@ -17,7 +17,7 @@ public class Entry implements Serializable {
 	private long term;		  //log term
 	private String command;   //command request by client
 	private String commandID;
-	
+
 	public String toFileString(Entry l) {
 		return l.getIndex()+"|"+l.getTerm()+"|"+l.getCommandID()+"|"+l.getCommand().replace("\n", "\\n");
 	}
@@ -25,11 +25,14 @@ public class Entry implements Serializable {
 	public String toFileString() {
 		return this.getIndex()+"|"+this.getTerm()+"|"+this.commandID+"|"+this.getCommand().replace("\n", "\\n");
 	}
-	
-	
+
+
 	public static Entry fromString(String s) {
-		String[] splited = s.split("\\|");
-		return new Entry(Long.parseLong(splited[0]), Long.parseLong(splited[1]), splited[2], splited[3]);
+		try {
+			String[] splited = s.split("\\|");
+			return new Entry(Long.parseLong(splited[0]), Long.parseLong(splited[1]), splited[2], splited[3]);
+		} catch (Exception e) {
+			return null;
+		}
 	}
-	
 }

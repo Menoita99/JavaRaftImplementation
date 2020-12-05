@@ -1,8 +1,10 @@
 package com.raft;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.lang.reflect.Array;
 import java.net.MalformedURLException;
 import java.rmi.AccessException;
 import java.rmi.AlreadyBoundException;
@@ -12,7 +14,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.ArrayList;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
@@ -25,6 +27,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.monitor.MonitorClient;
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
 import com.raft.models.Entry;
@@ -40,26 +43,27 @@ import lombok.Setter;
 @Setter
 public class Server extends Leader implements Serializable, FollowerBehaviour{
 
-	public static final int WAIT_FOR_RESPONSE_TIME_OUT = 250;
+	public static final String CONFIG_INI = "config.ini";
+
 	public int heartbeatTimeOut;
 
 	private static final long serialVersionUID = 1L;
 
 	private ExecutorService  executor;
+	private ExecutorService  connectorService = Executors.newFixedThreadPool(1);
 
 	private EntryManager entityManager;
 
-	//Server State
 	private ServerState state;
-	//Server mode (FOLLOWER,CANDIDATE,LEADER)
 	private Mode mode = Mode.FOLLOWER;
-	//Randomly picked timeOut in milliseconds to start an election
+
+	private int timeOutVote;
 	private int maxTimeOut;
 	private int minTimeOut;
 
 	//Reference to the cluster servers to make RPC (remote procedure call)
-	private ArrayList<FollowerBehaviour> clusterFollowBehaviour = new ArrayList<>();
-	private ArrayList<LeaderBehaviour> clusterLeaderBehaviour = new ArrayList<>();
+	private FollowerBehaviour[] clusterFollowBehaviour;
+	private LeaderBehaviour[] clusterLeaderBehaviour;
 	private Address[] clusterArray;
 
 	private HeartBeatSender heartBeatSender;
@@ -71,34 +75,24 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private Address selfId;
 
 
-	/**
-	 * This constructor must only be used to test
-	 */
-	public Server(Properties p) throws IOException, AlreadyBoundException{
-		state = new ServerState();
-		readIni(p);
+	private MonitorClient monitorClient;
+
+	private String root;
+
+
+	public Server(String root, boolean monitorMode) throws IOException, AlreadyBoundException{
+		this.root = root;
+		state = new ServerState(root);
+		readIni();
 		registServer();
-		tryToConnect();
+		tryToConnect(true);
 		entityManager = new EntryManager(this);
 		heartBeatSender = new HeartBeatSender(this);
 		heartBeatSender.start();
+		if(monitorMode)
+			monitorClient = new MonitorClient(this);
 		restartTimer();
-	}
-
-
-
-
-
-
-	public Server() throws IOException, AlreadyBoundException{
-		state = new ServerState();
-		readIni(null);
-		registServer();
-		tryToConnect();
-		entityManager = new EntryManager(this);
-		heartBeatSender = new HeartBeatSender(this);
-		heartBeatSender.start();
-		restartTimer();
+		System.out.println("Server "+selfId+" started");
 	}
 
 
@@ -109,20 +103,19 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	/**
 	 * Reads configuration file and initialises attributes
 	 */
-	private void readIni(Properties p) throws  IOException, AlreadyBoundException {
-		if(p == null) { 
-			p = new Properties();
-			p.load(new FileInputStream("src/main/resources/config.ini"));
-		}
+	private void readIni() throws  IOException, AlreadyBoundException {
+		Properties p = new Properties();
+		p.load(new FileInputStream(root+File.separator+CONFIG_INI));
+
 		selfId = new Address(p.getProperty("ip"), Integer.parseInt(p.getProperty("port")));
 
 		String[] clusterString = p.getProperty("cluster").split(";");
+
 		clusterArray = new Address[clusterString.length];
+		clusterLeaderBehaviour = new LeaderBehaviour[clusterString.length];
+		clusterFollowBehaviour = new FollowerBehaviour[clusterString.length];
+
 		heartbeatTimeOut = Integer.parseInt(p.getProperty("heartbeatTimeOut"));
-		for (int i = 0; i < clusterString.length; i++) {
-			clusterLeaderBehaviour.add(null);
-			clusterFollowBehaviour.add(null);
-		}
 
 		for (int i = 0; i < clusterString.length; i++) {
 			String[] splited = clusterString[i].split(":");
@@ -134,6 +127,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		String[] timeOutInterval = p.getProperty("timeOutInterval").trim().split(",");
 		maxTimeOut = Integer.parseInt(timeOutInterval[1]);
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
+
+		timeOutVote = Integer.parseInt(p.getProperty("timeOutVote"));
 	}
 
 
@@ -149,10 +144,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	private void registServer() throws RemoteException, AlreadyBoundException, AccessException, MalformedURLException {
 		Registry registry = LocateRegistry.createRegistry(selfId.getPort());
-		LeaderBehaviour server = (LeaderBehaviour) UnicastRemoteObject.exportObject(this, 0);
+		Object server = UnicastRemoteObject.exportObject(this, 0);
 		System.setProperty( "java.rmi.server.hostname", "127.0.0.1");
-		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", server);
-		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", server);
+		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", (LeaderBehaviour)server);
+		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/leader", (LeaderBehaviour)server);
 		registry.bind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/follow", (FollowerBehaviour)server);
 		Naming.rebind("rmi://"+selfId.getIpAddress()+":"+selfId.getPort()+"/follow", (FollowerBehaviour)server);
 	}
@@ -164,27 +159,21 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	/**
 	 * Looks for another servers
 	 */
-	public void tryToConnect() {
-		for (int i = 0; i < clusterArray.length; i++) {
-
-			if( clusterFollowBehaviour.size() < i || clusterFollowBehaviour.get(i) == null ) {
+	public void tryToConnect(boolean wait) {
+		Future<?> submit = connectorService.submit(()->{
+			for (int i = 0; i < clusterArray.length; i++) {
 				try {
-					clusterFollowBehaviour.add(i,(FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow"));
-					clusterFollowBehaviour.remove(i+1);
+					if(clusterLeaderBehaviour[i] == null)
+						clusterLeaderBehaviour[i] =(LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader");
+					if(clusterFollowBehaviour[i] == null)
+						clusterFollowBehaviour[i] = (FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow");
 				} catch (MalformedURLException | RemoteException | NotBoundException e) {
-					clusterFollowBehaviour.add(i,null);
+					System.err.println("Cloudn't connect to: "+clusterArray[i]);
 				}
 			}
-
-			if( clusterLeaderBehaviour.size() < i || clusterLeaderBehaviour.get(i) == null ) {
-				try {
-					clusterLeaderBehaviour.add(i,(LeaderBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/leader"));
-					clusterLeaderBehaviour.remove(i+1);
-				} catch (MalformedURLException | RemoteException | NotBoundException e) {
-					clusterLeaderBehaviour.add(i,null);
-				}
-			}
-		}
+		});
+		if(wait)
+			try { submit.get();} catch (InterruptedException | ExecutionException e) { e.printStackTrace(); }
 	}
 
 
@@ -203,22 +192,19 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	@Override
 	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
 		shouldBecameFollower(term);
-		
-		if(candidateId.equals(selfId))
-			return  new VoteResponse(this.state.getCurrentTerm(), true);
-		
-		VoteResponse resposta = new VoteResponse(this.state.getCurrentTerm(), false);
+		long currentTerm = state.getCurrentTerm();
 
-		if (term < this.state.getCurrentTerm()) {
-			return resposta;
-		}else {
-			if (this.state.getVotedFor() == null || this.state.getVotedFor().equals(candidateId) && this.state.getCommitIndex() == lastLogIndex && this.state.getCurrentTerm() == lastLogTerm) {
-				resposta.setVoteGranted(true);
-				state.setVotedFor(candidateId);
-			}
+		if(term<currentTerm)
+			return new VoteResponse(currentTerm, false);
+		else if(candidateId != null && candidateId.equals(this.state.getVotedFor()))
+			return new VoteResponse(currentTerm, true);
+		else if (state.getVotedFor() == null  && state.getLastAplied().getIndex() == lastLogIndex && state.getLastAplied().getTerm() == lastLogTerm) {
+			state.setVotedFor(candidateId);
+			return new VoteResponse(currentTerm, true);
 		}
+
 		restartTimer();
-		return resposta;
+		return new VoteResponse(currentTerm, false);
 	}
 
 
@@ -265,6 +251,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			if(leaderCommit > state.getCommitIndex())
 				state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
 		}
+
 		return new AppendResponse(state.getCurrentTerm(), hasPreviousLog);
 	}
 
@@ -278,10 +265,11 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * Verifies if this server must became a follower
 	 */
 	private void shouldBecameFollower(long term) {
-		if(mode == Mode.FOLLOWER)
-			return;
 		if(term > state.getCurrentTerm()) {
+			state.setCurrentTerm(term);
 			mode = Mode.FOLLOWER;
+			if(monitorClient != null)
+				monitorClient.newLeader();
 		}
 	}
 
@@ -295,46 +283,64 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	public void startElection() {
 		if(mode == Mode.FOLLOWER || mode == Mode.CANDIDATE) {
 			timer.cancel();
-			tryToConnect();
+			tryToConnect(false);
 
 			//Transition to candidate state
 			mode = Mode.CANDIDATE;
+
+			if(monitorClient != null)
+				monitorClient.startedElection();
+
 			this.state.setCurrentTerm(this.state.getCurrentTerm() +1);
 			this.state.setVotedFor(this.selfId);
-			
+			this.leaderId = null;
+
 			System.out.println("[Election] Starting Election "+selfId+" for term "+this.state.getCurrentTerm());
 
-			//Send RequestVote to every other Server
-			ArrayList<Future<VoteResponse>> listFuture = new ArrayList<>();
+			@SuppressWarnings("unchecked")
+			Future<VoteResponse>[] listFuture = (Future<VoteResponse>[]) Array.newInstance(Future.class, clusterArray.length);
+
+			int i=0;
 			for(LeaderBehaviour clstr : clusterLeaderBehaviour) {
 				if(clstr != null) {
 					Future<VoteResponse> resp = executor.submit(()-> clstr.requestVote(this.state.getCurrentTerm(), selfId, this.state.getLastEntry().getIndex(), this.state.getLastEntry().getTerm()));
-					listFuture.add(resp);
+					listFuture[i]=(resp);
 				}
+				i++;
 			}
-			int votes = 0;
 
+			int votes = 0;
+			i=0;
 			for(Future<VoteResponse> ftr : listFuture){
 				try {
-					VoteResponse vote = ftr.get(WAIT_FOR_RESPONSE_TIME_OUT, TimeUnit.MILLISECONDS);
-					if(vote != null && vote.isVoteGranted())
-						votes++;								
-				} catch (InterruptedException | ExecutionException | TimeoutException e) {
-					e.printStackTrace();
+					if(ftr != null) {
+						VoteResponse vote = ftr.get(timeOutVote, TimeUnit.MILLISECONDS);
+						if(vote != null && vote.isVoteGranted()) 
+							votes++;							
+					}
+				} catch (Exception e) {
+					System.err.println("Counld not send request vote to: "+ clusterArray[i]);
+					clusterLeaderBehaviour[i] = null;
 					continue;
 				}
+				i++;
 			}	
 
 			System.out.println("[Election] Got "+votes+" votes "+selfId);
-			if (votes > clusterArray.length/2) {
+			if (votes > clusterArray.length/2 && mode != Mode.FOLLOWER) {
 				System.out.println("[Election] I m leader "+selfId);
+
 				mode = Mode.LEADER;
 				getLeaderState().reset(this);
 				leaderId = selfId;
 				heartBeatSender.goOn();
-			}else if((double) votes / (double) clusterArray.length == 0.5){
+
+				if(monitorClient != null)
+					monitorClient.newLeader();
+			}else if((double) votes / (double) clusterArray.length == 0.5)
 				startElection();
-			}
+			else 
+				mode = Mode.FOLLOWER;
 			restartTimer();
 		}
 	}
@@ -353,11 +359,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		timer.cancel();
 		timer = new Timer();
 		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
+		System.out.println(LocalTime.now()+"---------- RESTARTING TIMER "+timeOut+" -----------");
 		timer.schedule(new TimerTask() {
 			public void run() {
 				startElection();
 			}
 		}, timeOut);
+		if(monitorClient != null)
+			monitorClient.updateStatus();
 	}
 
 

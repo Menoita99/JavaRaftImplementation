@@ -59,7 +59,7 @@ public class Client {
 	private void readIni() {
 		try {
 			Properties p = new Properties();
-			p.load(new FileInputStream("src/main/resources/config.ini"));
+			p.load(new FileInputStream("src/main/resources/client/config.ini"));
 			clusterMembers = p.getProperty("cluster");
 			address = new Address(clientID, 0);
 
