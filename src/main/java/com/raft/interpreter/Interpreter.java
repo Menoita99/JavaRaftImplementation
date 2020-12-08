@@ -21,27 +21,27 @@ import lombok.NoArgsConstructor;
 public class Interpreter {
 
 	private ThreadPool pool = new ThreadPool(1);
+	String lis ="";
 
-//	private Binding binding = new Binding();
-//	private GroovyShell shell = new GroovyShell(binding);
 
 	private Map<String, Operation> operationsMap = new HashMap<String, Operation>();
+	// Keys and values should be strings
+	private Map<String, String> keyStore = new HashMap<String, String>();
 
 
 	public void submit(List<Entry> entries) { 
 		
 		pool.submit(new Task(() -> this.execute(entries)));
 	}
-	
-	
-	
+
+
+
 	private synchronized void execute(List<Entry> entries) {
 		entries.sort((Entry o1, Entry o2)-> (int)o1.getIndex()- (int)o2.getIndex());
 		for (Entry entry : entries) {
 			Operation operation = null;
 			try {
-				//operation = new Operation(entry.getCommandID(), shell.evaluate(entry.getCommand()));
-				operation = new Operation(entry.getCommandID(), "COMMAND EVALUATED");
+				operation = new Operation(entry.getCommandID(), shell(entry.getCommand()));
 			}catch (Exception e) {
 				operation = new Operation(entry.getCommandID(),e);
 				e.printStackTrace();
@@ -51,10 +51,43 @@ public class Interpreter {
 		}
 	}
 
-	
-	
-	
-	
+
+	private Object shell(String command) {
+		String[] v = command.split(":");
+		if(v.length>=2)
+			switch(v[0]) {
+			case "put":
+				keyStore.put(v[1], v[2]);
+				return "Added: " + v[1] + ":" + v[2];
+			case "get":
+				return keyStore.get(v[1]);
+			case "del":
+				keyStore.remove(v[1], v[2]);
+				return "Removed:" + v[1] + ":" + v[2];
+			case "lis":
+				lis ="";
+				keyStore.entrySet().forEach(entry->{
+					String a = entry.getKey() + ":" + entry.getValue();
+					lis += a+"\n";
+				});			//sysout de tudo	
+				break;
+			case "cas":
+				// v  1, 2,   3
+				//cas(K,Vold,Vnew)
+				//				x=get(K); 
+				//				if(x==Vold) 
+				//					put(K,Vnew); 
+				//				return x;
+				String x = keyStore.get(v[1]);
+				if(x==v[2]) {
+					keyStore.put(v[1], v[3]);
+				}
+				return x;
+			}
+		return "something wrong is not right";
+	}
+
+
 
 	public synchronized Object getCommandResult(String commandId,long timeOut) throws TimeoutException, InterruptedException {
 		long startTime =System.currentTimeMillis();
