@@ -14,7 +14,6 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
@@ -74,10 +73,12 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private Address leaderId;
 	private Address selfId;
 
-
 	private MonitorClient monitorClient;
 
-	private String root;
+	private String root; 
+
+	private long lastRestrat;
+
 
 
 	public Server(String root, boolean monitorMode) throws IOException, AlreadyBoundException{
@@ -88,9 +89,11 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		tryToConnect(true);
 		entityManager = new EntryManager(this);
 		heartBeatSender = new HeartBeatSender(this);
-		heartBeatSender.start();
-		if(monitorMode)
+		heartBeatSender.start(); 
+		if(monitorMode) {
 			monitorClient = new MonitorClient(this);
+			monitorClient.updateStatus();
+		}
 		restartTimer();
 		System.out.println("Server "+selfId+" started");
 	}
@@ -169,6 +172,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 						clusterFollowBehaviour[i] = (FollowerBehaviour) Naming.lookup("rmi://" + clusterArray[i].getIpAddress() + ":" + clusterArray[i].getPort() + "/follow");
 				} catch (MalformedURLException | RemoteException | NotBoundException e) {
 					System.err.println("Cloudn't connect to: "+clusterArray[i]);
+					if(monitorClient != null)
+						monitorClient.updateStatus();
 				}
 			}
 		});
@@ -184,26 +189,38 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * Invoked by candidates to gather votes 
 	 * @param term candidate�s term
 	 * @param candidateId candidate requesting vote
-	 * @param lastLogIndex index of candidate�s last log entry
-	 * @param lastLogTerm term of candidate�s last log entry
+	 * @param lastEntryIndex index of candidate�s last log entry
+	 * @param lastEntryTerm term of candidate�s last log entry
 	 * @return VoteResponse
 	 * @throws RemoteException extends Remote Interface
 	 */
 	@Override
-	public VoteResponse requestVote(long term, Address candidateId, long lastLogIndex, long lastLogTerm)throws RemoteException {
+	public VoteResponse requestVote(long term, Address candidateId, long lastEntryIndex, long lastEntryTerm)throws RemoteException {
 		shouldBecameFollower(term);
-		long currentTerm = state.getCurrentTerm();
 
-		if(term<currentTerm)
+		long currentTerm = state.getCurrentTerm();
+		if(term<currentTerm) {
+			System.out.println(selfId+" NOT "+candidateId+" becuase term to low");
 			return new VoteResponse(currentTerm, false);
-		else if(candidateId != null && candidateId.equals(this.state.getVotedFor()))
-			return new VoteResponse(currentTerm, true);
-		else if (state.getVotedFor() == null  && state.getLastAplied().getIndex() == lastLogIndex && state.getLastAplied().getTerm() == lastLogTerm) {
-			state.setVotedFor(candidateId);
-			return new VoteResponse(currentTerm, true);
+		} else {
+			Address votedFor = state.getVotedFor(); 
+			if(votedFor != null && !candidateId.equals(this.state.getVotedFor())) {
+				System.out.println(selfId+" NOT "+candidateId+" because i already voted for "+votedFor);
+				return new VoteResponse(currentTerm, false);
+			}else if(votedFor != null && candidateId.equals(this.state.getVotedFor()) && term == currentTerm) {
+				System.out.println(selfId+" granted "+candidateId+" because i already voted for him");
+				restartTimer();
+				return new VoteResponse(currentTerm, true);
+			}else if (votedFor == null && state.getLastAplied().getIndex() <= lastEntryIndex) {
+				System.out.println(selfId+" granted "+candidateId+" because last entry is more recent or equals then mine");
+				restartTimer();
+				state.setVotedFor(candidateId);
+				return new VoteResponse(currentTerm, true);
+			}
 		}
 
-		restartTimer();
+
+		System.out.println(selfId+" NOT "+candidateId+" idk");
 		return new VoteResponse(currentTerm, false);
 	}
 
@@ -215,44 +232,55 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * Method Invoked by leader to replicate log entries; also used as heartbeat 
 	 * @param term leader�s term
 	 * @param leaderId so follower can redirect clients
-	 * @param prevLogIndex index of log entry immediately preceding new ones
-	 * @param prevLogTerm term of prevLogIndex entry
+	 * @param prevEntryIndex index of log entry immediately preceding new ones
+	 * @param prevEntryTerm term of prevLogIndex entry
 	 * @param entries log entries to store (empty for heartbeat; may send more than one for efficiency)
 	 * @param leaderCommit leader�s commitIndex
 	 * @return AppendResponse
 	 * @throws RemoteException extends Remote Interface
 	 */
 	@Override
-	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex, long prevLogTerm,List<Entry> entries, long leaderCommit) throws RemoteException {
+	public AppendResponse appendEntries(long term, Address leaderId, long prevEntryIndex, long prevEntryTerm,List<Entry> entries, long leaderCommit) throws RemoteException {
 		restartTimer();
+		shouldBecameFollower(term);
+
 		if(leaderId.equals(selfId))
 			return null;
 
-		shouldBecameFollower(term);
+		if(term<state.getCurrentTerm())
+			return new AppendResponse(state.getLastEntry(),state.getCurrentTerm(), false);
+
 		this.leaderId = leaderId;
 
-		boolean hasPreviousLog = state.hasLog(prevLogTerm,prevLogIndex);
-
+		boolean hasPreviousLog = state.hasLog(prevEntryTerm,prevEntryIndex);
+		long start = System.currentTimeMillis();
 		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
-
 			for (Entry entry : entries) {
 				if(entry != null) {
 					Entry lastLog = state.getLastEntry();
-					if((entry.getIndex() == lastLog.getIndex() && entry.getTerm() != lastLog.getTerm()) || entry.getIndex()<lastLog.getIndex())
-						if(mode == Mode.FOLLOWER)
-							state.override(entry);
-					if(entry.getIndex()>lastLog.getIndex())
+					if(entry.getIndex() == lastLog.getIndex()+1) {
 						state.addEntry(entry);
+					}else if(entry.getIndex() == lastLog.getIndex() && entry.getTerm() != lastLog.getTerm() && mode == Mode.FOLLOWER) {
+						state.override(entry);
+					}else if(entry.getIndex() < lastLog.getIndex()) {
+						if(state.getEntry(entry.getIndex()).getTerm() != entry.getTerm()) {
+							state.override(entry);
+						}
+					}
 				}
 			}
 
 			if(leaderCommit > state.getCommitIndex())
 				state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
+			System.out.println("Time to evaluate: "+(System.currentTimeMillis()-start)+" "+entries.size()+" entries");
+			System.out.println("----------------------------------------");
 		}
+		if(monitorClient != null && !entries.isEmpty())
+			monitorClient.updateStatus();
 
-		return new AppendResponse(state.getCurrentTerm(), hasPreviousLog);
+		return new AppendResponse(state.getLastEntry(),state.getCurrentTerm(), hasPreviousLog);
 	}
 
 
@@ -269,7 +297,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			state.setCurrentTerm(term);
 			mode = Mode.FOLLOWER;
 			if(monitorClient != null)
-				monitorClient.newLeader();
+				monitorClient.updateStatus();
 		}
 	}
 
@@ -292,7 +320,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				monitorClient.startedElection();
 
 			this.state.setCurrentTerm(this.state.getCurrentTerm() +1);
-			this.state.setVotedFor(this.selfId);
+			//			this.state.setVotedFor(this.selfId);
 			this.leaderId = null;
 
 			System.out.println("[Election] Starting Election "+selfId+" for term "+this.state.getCurrentTerm());
@@ -304,7 +332,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			for(LeaderBehaviour clstr : clusterLeaderBehaviour) {
 				if(clstr != null) {
 					Future<VoteResponse> resp = executor.submit(()-> clstr.requestVote(this.state.getCurrentTerm(), selfId, this.state.getLastEntry().getIndex(), this.state.getLastEntry().getTerm()));
-					listFuture[i]=(resp);
+					listFuture[i]=resp;
 				}
 				i++;
 			}
@@ -329,7 +357,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			System.out.println("[Election] Got "+votes+" votes "+selfId);
 			if (votes > clusterArray.length/2 && mode != Mode.FOLLOWER) {
 				System.out.println("[Election] I m leader "+selfId);
-
 				mode = Mode.LEADER;
 				getLeaderState().reset(this);
 				leaderId = selfId;
@@ -356,19 +383,40 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * between minTimeOut and maxTimeOut
 	 */
 	private void restartTimer() {
+		lastRestrat = System.currentTimeMillis();
 		timer.cancel();
 		timer = new Timer();
 		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
-		System.out.println(LocalTime.now()+"---------- RESTARTING TIMER "+timeOut+" -----------");
 		timer.schedule(new TimerTask() {
 			public void run() {
-				startElection();
+				if(System.currentTimeMillis()-lastRestrat > timeOut)
+					startElection();
+				else
+					restartTimer(System.currentTimeMillis()-lastRestrat-timeOut);
 			}
 		}, timeOut);
-		if(monitorClient != null)
-			monitorClient.updateStatus();
 	}
 
+
+	/**
+	 * Restarts the timer that will trigger an election with the given value 
+	 * @param timeout time in mills
+	 */
+	private void restartTimer(long timeOut) {
+		long timeout = (long)Math.max(0, timeOut);
+		lastRestrat = System.currentTimeMillis();
+		timer.cancel();
+		timer = new Timer();
+		timer.schedule(new TimerTask() {
+			public void run() {
+				long time = System.currentTimeMillis()-lastRestrat;
+				if(time > timeout)
+					startElection();
+				else
+					restartTimer(time-timeout);
+			}
+		}, timeout);
+	}
 
 
 
@@ -394,7 +442,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		default:
 			throw new IllegalArgumentException("Unexpected value: " + mode);
 		}
-	}
+	} 
 
 
 
@@ -428,13 +476,19 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 			Entry entry = state.createEntry(command, commandID);
 			entityManager.submitEntry(entry);
+
+			if(monitorClient != null)
+				monitorClient.updateStatus();
+
 			try {
-				serverResponse.setResponse(state.getInterpreter().getCommandResult(commandID, 2000));
+				serverResponse.setResponse(state.getInterpreter().getCommandResult(commandID, 1000000));
 			} catch (TimeoutException | InterruptedException e) {
 				serverResponse.setResponse(e);
+				e.printStackTrace();
 			}
 		}
-		System.out.println(serverResponse);
+		if(monitorClient != null)
+			monitorClient.commandEval();
 		return serverResponse;
 	}
 
@@ -464,5 +518,15 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		shouldBecameFollower(term);
 		// TODO Auto-generated method stub
 		return 0;
+	}
+
+
+
+
+
+
+	@Override
+	public Address getAddress() throws RemoteException {
+		return selfId;
 	}
 }

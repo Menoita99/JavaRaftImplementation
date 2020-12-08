@@ -3,7 +3,6 @@ package com.monitor;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.rmi.Naming;
-import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
@@ -32,8 +31,11 @@ public class MonitorServer implements MonitorBehaviour{
 				evals = 0;
 			}
 		}, 0, 1000);
-	}
+	} 
 
+	
+	
+	
 	private void registServer(){
 		try {
 			Registry registry = LocateRegistry.createRegistry(selfId.getPort());
@@ -47,6 +49,8 @@ public class MonitorServer implements MonitorBehaviour{
 	}
 
 
+	
+	
 	private void readIni() {
 		try {
 			Properties p = new Properties();
@@ -75,21 +79,12 @@ public class MonitorServer implements MonitorBehaviour{
 		controller.addHistoricEntry(request);
 	}
 
-
-
-
-	@Override
-	public void downGradetoFollow(MonitorRequest request) throws RemoteException {
-		controller.updateTableBottomStatus(request,clusterArray);
-		controller.addHistoricEntry(request);
-	}
 	
 	
 
 
 	@Override
 	public void newLeader(MonitorRequest request) {
-		controller.setLeaderLabelText("Leader: "+request.getSender());
 		controller.updateTableBottomStatus(request,clusterArray);
 		controller.addHistoricEntry(request);
 	}
@@ -117,6 +112,6 @@ public class MonitorServer implements MonitorBehaviour{
 		if(instance == null)
 			instance = new MonitorServer();
 		return instance;
-	}
+	} 
 
 }

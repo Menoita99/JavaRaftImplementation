@@ -12,10 +12,10 @@ import lombok.Data;
  * @author RuiMenoita
  */
 @Data
-@AllArgsConstructor
+@AllArgsConstructor 
 public class AppendResponse implements Serializable {
 	private static final long serialVersionUID = 1L;
-//	private long index;			//current index
+	private Entry lastEntry;//current index
 	private long term;			//current server term
 	private boolean success;	// has appended or not entries
 }

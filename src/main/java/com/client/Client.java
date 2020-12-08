@@ -3,10 +3,8 @@ package com.client;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.Inet4Address;
-import java.net.MalformedURLException;
 import java.net.UnknownHostException;
 import java.rmi.Naming;
-import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.Properties;
 
@@ -14,37 +12,18 @@ import com.raft.LeaderBehaviour;
 import com.raft.models.Address;
 import com.raft.models.ServerResponse;
 
-import javafx.beans.property.SimpleStringProperty;
 import lombok.Data;
 
 @Data
 public class Client {
 
-	
-	private Address address;
-
-	private String clusterMembers ;
-	private int tryCount = -1;
-	private String clusterMembersVector[];
-	private LeaderBehaviour look_up;
-
-	private SimpleStringProperty leaderPort;
-	private SimpleStringProperty leaderIp;
-	
-	
-
+	private Address[] clusterArray;
+	private LeaderBehaviour leader;
 	private String clientID;
-	
-	
+	private Address leaderAddress;
 	
 	public Client() {
-		leaderIp = new SimpleStringProperty();
-		leaderPort = new SimpleStringProperty();
-		try {
-			clientID = Inet4Address.getLocalHost().getHostAddress();
-		} catch (UnknownHostException e) {
-			e.printStackTrace();
-		}
+		clientID = Address.getLocalIp();
 		readIni();
 		connectToServer();
 		
@@ -60,13 +39,15 @@ public class Client {
 		try {
 			Properties p = new Properties();
 			p.load(new FileInputStream("src/main/resources/client/config.ini"));
-			clusterMembers = p.getProperty("cluster");
-			address = new Address(clientID, 0);
-
+			String[] clusterString = p.getProperty("cluster").split(";");
+			clusterArray = new Address[clusterString.length];
+			for (int i = 0; i < clusterString.length; i++) {
+				String[] splited = clusterString[i].split(":");
+				clusterArray[i] = new Address(splited[0], Integer.parseInt(splited[1]));
+			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		clusterMembersVector = clusterMembers.split(";");
 	}
 
 
@@ -92,7 +73,7 @@ public class Client {
 	}
 
 
-	
+	 
 	
 	/**
 	 * Connects to server
@@ -101,38 +82,30 @@ public class Client {
 	 * 
 	 */
 	public void connectToServer() {
-		if(tryCount==clusterMembersVector.length-1) {
-			return;
-		}
+		for (int i = 0; i < clusterArray.length; i++) {
+			Address address = clusterArray[i];
+			try { 
 
-		tryCount++;
-		SimpleStringProperty ipToConnect = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[0]);
-		SimpleStringProperty portToConnect = new SimpleStringProperty(clusterMembersVector[tryCount].split(":")[1]);
-		System.out.println("Request ->"+ipToConnect.get() + ":"+portToConnect.get());
-
-		try {
-
-			look_up = (LeaderBehaviour) Naming.lookup("rmi://" + ipToConnect.get() + ":" + portToConnect.get() + "/leader");
-			ServerResponse response = look_up.execute("", generateCommandID(clientID));
-			
-//			 If the Object of the ServerResponse instance is null, that means it received
-//			 the Address of the leader. Try reconnect to leader
-			if (response.getResponse()==null) {
-				System.out.println("Received message from follower, attempting leader connect");
-				leaderIp.set(response.getLeader().getIpAddress());
-				leaderPort.set(String.valueOf(response.getLeader().getPort()));
+				leader = (LeaderBehaviour) Naming.lookup("rmi://" + address.getIpAddress() + ":" + address.getPort() + "/leader");
+				ServerResponse response = leader.execute("", generateCommandID(clientID));
 				
-				look_up = (LeaderBehaviour) Naming.lookup("rmi://" + leaderIp.get() + ":" + leaderPort.get() + "/leader");
-				response = look_up.execute("", generateCommandID(clientID));
+//				 If the Object of the ServerResponse instance is null, that means it received
+//				 the Address of the leader. Try reconnect to leader
+				if (response.getResponse() == null) {
+					System.out.println("Received message from follower, attempting leader connect: "+response.getLeader());
+					
+					leader = (LeaderBehaviour) Naming.lookup("rmi://" + response.getLeader().getIpAddress() + ":" + response.getLeader().getPort() + "/leader");
+					response = leader.execute("", generateCommandID(clientID));
+					leaderAddress = address;
+					if (response.getResponse() == null) 
+						return;
+				}
+			} catch (Exception e) {
+				System.err.println("Could not connect to: "+address);
+				continue;
 			}
-			//if client has sends a message, reset try count,if try count = nº of clusters will stop trying to connect trying
-			tryCount = -1;
-			
-		} catch (NotBoundException | MalformedURLException | RemoteException e) {
-			e.printStackTrace();
-			System.out.println("This cluster member is offline");
-			connectToServer();
 		}
+		System.out.println(leader == null ? "No leader Found" : "Connected");
 	}
 
 
@@ -149,7 +122,7 @@ public class Client {
 		//3 tries
 		for (int i = 0; i < 3; i++) {
 			try {
-				to_return = look_up.execute(command, operationID);
+				to_return = leader.execute(command, operationID);
 				break;
 			} catch (RemoteException | NullPointerException e) {
 				e.printStackTrace();
@@ -162,6 +135,32 @@ public class Client {
 		}
 		return to_return;
 	}
+	
+	
+	
+	public void startInfiniteRequests() {
+		String op = "1+1";
+		String commandID = generateCommandID(clientID);
+		boolean retry = true;
+		while(true) { 
+			if(!retry)
+				commandID = generateCommandID(clientID);
+			try {
+				ServerResponse resp = leader.execute(op, commandID);
+				if(resp.getResponse() == null)
+					connectToServer();
+				else
+					retry = false;
+			} catch (Exception e) {
+				System.out.println("Couldn't execute action");
+				retry = true;
+				connectToServer();
+			}
+		}
+	}
+	
+	
+	
 
 	
 	/**

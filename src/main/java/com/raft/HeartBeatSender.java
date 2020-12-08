@@ -9,7 +9,7 @@ public class HeartBeatSender extends Thread {
 
 	public HeartBeatSender(Server server) {
 		this.server = server;
-	}
+	} 
 
 
 	@Override

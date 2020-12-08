@@ -21,7 +21,7 @@ public class MonitorClient {
 	private Server server;
 
 
-	public MonitorClient(Server server){
+	public MonitorClient(Server server){ 
 		this.server = server;
 		monitorThread.submit(new Task(()->{
 			try {
@@ -32,7 +32,7 @@ public class MonitorClient {
 				e.printStackTrace();
 			}
 		}));
-	}
+	} 
 
 
 
@@ -46,16 +46,6 @@ public class MonitorClient {
 		}));
 	}
 
-	public void downGradetoFollow() {
-		monitorThread.submit(new Task(()->{
-			try {
-				monitorServer.downGradetoFollow(new MonitorRequest(server));
-			} catch (RemoteException e) {
-				e.printStackTrace();
-			}
-		}));
-	}
-	
 	
 	public void newLeader() {
 		monitorThread.submit(new Task(()->{

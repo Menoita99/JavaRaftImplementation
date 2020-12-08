@@ -19,11 +19,11 @@ public class Entry implements Serializable {
 	private String commandID;
 
 	public String toFileString(Entry l) {
-		return l.getIndex()+"|"+l.getTerm()+"|"+l.getCommandID()+"|"+l.getCommand().replace("\n", "\\n");
+		return l.getIndex()+"|"+l.getTerm()+"|"+l.getCommand().replace("\n", "\\n")+"|"+l.getCommandID();
 	}
 
 	public String toFileString() {
-		return this.getIndex()+"|"+this.getTerm()+"|"+this.commandID+"|"+this.getCommand().replace("\n", "\\n");
+		return this.getIndex()+"|"+this.getTerm()+"|"+this.getCommand().replace("\n", "\\n")+"|"+this.commandID;
 	}
 
 
@@ -33,6 +33,6 @@ public class Entry implements Serializable {
 			return new Entry(Long.parseLong(splited[0]), Long.parseLong(splited[1]), splited[2], splited[3]);
 		} catch (Exception e) {
 			return null;
-		}
+		} 
 	}
 }

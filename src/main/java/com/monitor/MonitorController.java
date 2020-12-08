@@ -24,8 +24,8 @@ import javafx.stage.Stage;
 
 public class MonitorController extends Application implements Initializable {
 
-	@FXML private Text leaderLabel;
 	@FXML private Text speedLabel;
+    @FXML private Text averageSpeedLabel;
 	@FXML private LineChart<String, Integer> speedChart;
 	@FXML private TableView<TableHistoricModel> tableRight;
 	@FXML private TableView<TableServerModel> tableBottom;
@@ -34,6 +34,7 @@ public class MonitorController extends Application implements Initializable {
 
 
 	private XYChart.Series<String, Integer> data = new XYChart.Series<String, Integer>();
+	private XYChart.Series<String, Integer> averageData = new XYChart.Series<String, Integer>();
 	private static MonitorController intance;
 
 
@@ -53,10 +54,12 @@ public class MonitorController extends Application implements Initializable {
 
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
-		data.setName("Throughput");
+		data.setName("Throughput"); 
+		averageData.setName("Average");
 		speedChart.setAnimated(false);
 		speedChart.setCreateSymbols(false);
 		speedChart.getData().add(data);
+		speedChart.getData().add(averageData);
 		tableBottom.getColumns().addAll(TableServerModel.getColumns());
 		tableBottom.setItems(FXCollections.observableArrayList());
 		tableRight.getColumns().addAll(TableHistoricModel.getColumns());
@@ -72,11 +75,20 @@ public class MonitorController extends Application implements Initializable {
 		Platform.runLater(()->{
 			LocalTime now = LocalTime.now();
 			speedLabel.setText("Speed: "+evals+" op/s");
+			
 			Data<String, Integer> entry = new XYChart.Data<String, Integer>(now.getMinute()+":"+(now.getSecond()<10?"0"+now.getSecond():now.getSecond()), evals);
 			ObservableList<Data<String, Integer>> list = data.getData();
 			if(list.size()>MAX_ELEMS)
 				list.remove(0);
 			list.add(entry);
+			
+			int average = (int) list.stream().mapToInt(d -> d.getYValue()).average().orElse(0);
+			averageSpeedLabel.setText("Average Speed: "+average+" op/s");
+			Data<String, Integer> averageEntry = new XYChart.Data<String, Integer>(now.getMinute()+":"+(now.getSecond()<10?"0"+now.getSecond():now.getSecond()), average);
+			ObservableList<Data<String, Integer>> averageList = averageData.getData();
+			if(averageList.size()>MAX_ELEMS)
+				averageList.remove(0);
+			averageList.add(averageEntry);
 		});
 	}
 
@@ -102,7 +114,7 @@ public class MonitorController extends Application implements Initializable {
 				model.setActive(true);
 			}
 
-			if(request.getMode().equals(Mode.LEADER)) {
+			if(!request.getMode().equals(Mode.FOLLOWER)) {
 				for (int i = 0; i < clusterArray.length; i++) {
 					Address server = clusterArray[i];
 					if(!server .equals(serverIp)) {
@@ -125,11 +137,6 @@ public class MonitorController extends Application implements Initializable {
 				items.remove(0);
 			items.add(new TableHistoricModel(request.getMode(), request.getSender()));
 		});
-	}
-	
-	
-	public void setLeaderLabelText(String string) {
-		Platform.runLater(()->leaderLabel.setText(string));
 	}
 
 

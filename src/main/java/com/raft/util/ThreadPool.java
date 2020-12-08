@@ -23,6 +23,16 @@ public class ThreadPool {
 		}
 	}
 	
+	/**
+	 * @return returns true if at least one worker is waiting for a task
+	 */
+	public boolean isWorkerAvailable() {
+		for (Worker worker : workers)
+			if(worker.getState() == Thread.State.BLOCKED || worker.getState() == Thread.State.WAITING)
+				return true;
+		return false;
+	}
+	
 	private class Worker extends Thread{
 		
 		 @Override

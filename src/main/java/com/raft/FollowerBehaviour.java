@@ -27,7 +27,7 @@ public interface FollowerBehaviour extends Remote{
 	 */
 	public AppendResponse appendEntries(long term, Address leaderId, long prevLogIndex,long prevLogTerm,List<Entry> entries,long leaderCommit) throws RemoteException;
 
-	
+	public Address getAddress() throws RemoteException;
 	
 	/*
 	 *This method may chance it's parameters since using Java RMI we don't  need chunks and data because Java RMI handles
@@ -46,7 +46,4 @@ public interface FollowerBehaviour extends Remote{
 	 * @throws RemoteException extends Remote Interface
 	 */
 	public long InstallSnapshot(long term, Address leaderId,long lastIncludedIndex,long lastIncludedTerm,long offset, byte[] data, boolean done) throws RemoteException;
-
-	
-
 }

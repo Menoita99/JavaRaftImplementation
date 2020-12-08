@@ -22,13 +22,14 @@ public class Interpreter {
 
 	private ThreadPool pool = new ThreadPool(1);
 
-	private Binding binding = new Binding();
-	private GroovyShell shell = new GroovyShell(binding);
+//	private Binding binding = new Binding();
+//	private GroovyShell shell = new GroovyShell(binding);
 
 	private Map<String, Operation> operationsMap = new HashMap<String, Operation>();
 
 
-	public void submit(List<Entry> entries) {
+	public void submit(List<Entry> entries) { 
+		
 		pool.submit(new Task(() -> this.execute(entries)));
 	}
 	
@@ -37,12 +38,13 @@ public class Interpreter {
 	private synchronized void execute(List<Entry> entries) {
 		entries.sort((Entry o1, Entry o2)-> (int)o1.getIndex()- (int)o2.getIndex());
 		for (Entry entry : entries) {
-			System.out.println(" Executing -> "+entry+ " in Thread "+ Thread.currentThread());
 			Operation operation = null;
 			try {
-				operation = new Operation(entry.getCommandID(), shell.evaluate(entry.getCommand()));
+				//operation = new Operation(entry.getCommandID(), shell.evaluate(entry.getCommand()));
+				operation = new Operation(entry.getCommandID(), "COMMAND EVALUATED");
 			}catch (Exception e) {
 				operation = new Operation(entry.getCommandID(),e);
+				e.printStackTrace();
 			}
 			operationsMap.put(entry.getCommandID().split(":")[0], operation);
 			notifyAll();

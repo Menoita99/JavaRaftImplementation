@@ -42,12 +42,12 @@ public class ClientController extends Application implements Initializable{
 	public void initialize(URL location, ResourceBundle resources) {
 		instance = this;
 		client = new Client();
-		ipClient.setText(client.getAddress().getIpAddress());
-		ipLeader.textProperty().bind((client.getLeaderIp()));
-		portLeader.textProperty().bind((client.getLeaderPort()));
+//		ipClient.setText(client.getAddress().getIpAddress());
+//		ipLeader.textProperty().bind((client.getLeaderIp()));
+//		portLeader.textProperty().bind((client.getLeaderPort()));
 		textArea.setEditable(false);
 	}
-
+ 
 	
 	@Override
 	public void start(Stage window) throws Exception {
