@@ -11,8 +11,6 @@ import com.raft.models.Operation;
 import com.raft.models.Task;
 import com.raft.util.ThreadPool;
 
-import groovy.lang.Binding;
-import groovy.lang.GroovyShell;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 

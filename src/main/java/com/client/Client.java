@@ -139,7 +139,7 @@ public class Client {
 	
 	
 	public void startInfiniteRequests() {
-		String op = "1+1";
+		String op = "put:Var:Value";
 		String commandID = generateCommandID(clientID);
 		boolean retry = true;
 		while(true) { 
