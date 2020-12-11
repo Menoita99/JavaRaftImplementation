@@ -18,6 +18,7 @@ import java.util.Vector;
 import com.raft.interpreter.Interpreter;
 import com.raft.models.Address;
 import com.raft.models.Entry;
+import com.raft.models.Snapshot;
 
 import lombok.AccessLevel;
 import lombok.Data;
@@ -65,7 +66,8 @@ public class ServerState implements Serializable{
 	private ReentrantReadWriteLock logLock = new ReentrantReadWriteLock();
 
 	private Interpreter interpreter = new Interpreter();
-
+	
+	private int entryCounter;
 
 
 	public ServerState(String rootPath) throws IOException {
@@ -102,6 +104,8 @@ public class ServerState implements Serializable{
 			reader.close();
 		}
 		logWriter = new PrintWriter(new FileOutputStream(new File(logFilePath),true));
+		
+		entryCounter=0;
 	}
 
 
@@ -190,13 +194,30 @@ public class ServerState implements Serializable{
 			commitIndex = index;
 			interpreter.submit(commitedEntries);
 			log.removeAll(commitedEntries);
+			
+			assessSnapshot();
 		}finally {
 			lock.unlock();
 		}
 	}
 
 
-
+	private void assessSnapshot() {
+		if (entryCounter == 1000) {
+			entryCounter=0;
+			new Thread(()->{
+				Snapshot snapshot = new Snapshot(this);
+				snapshot.snap();
+				snapshot.save();
+				
+			}).start();
+		}
+		else {
+			entryCounter++;
+		}
+	}
+	
+	
 
 	private void saveEntries(List<Entry> commitedEntries) {
 		try {
