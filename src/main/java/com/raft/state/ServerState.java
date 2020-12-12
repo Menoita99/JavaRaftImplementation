@@ -208,13 +208,15 @@ public class ServerState implements Serializable{
 	//TO TEST
 	public static void main(String[] args) throws IOException {
 		ServerState st = new ServerState( "src/main/resources/Server1000");
-		st.assessSnapshot(2000);
+		st.assessSnapshot(150_000);
 	}
+	
+	
 	
 
 	public void assessSnapshot(long size) {
 		entryCounter = entryCounter + size;
-		if (entryCounter >= 1000) {
+		if (entryCounter >= 150_000) {
 			entryCounter = 0;
 			new Thread(snapshot::snap).start();
 		}
@@ -366,7 +368,6 @@ public class ServerState implements Serializable{
 
 		try {
 			lock.lock();
-
 			for (Entry entry : log) 
 				if(entry.getIndex() == index)
 					return entry;
@@ -374,9 +375,8 @@ public class ServerState implements Serializable{
 			lock.unlock();
 		}
 
-
+		logLock.readLock().lock();
 		try(ReversedLinesFileReader reader = new ReversedLinesFileReader(new File(logFilePath),Charset.defaultCharset())){
-			logLock.readLock().lock();
 			String line = "";
 			while((line = reader.readLine()) != null) {
 				Entry e =  Entry.fromString(line);
@@ -390,5 +390,19 @@ public class ServerState implements Serializable{
 		}
 
 		return null;
+	}
+
+
+
+
+	public void clearLogFile() throws IOException {
+		logLock.writeLock().lock();
+		try {
+			logWriter.close();
+			Files.write(Paths.get(logFilePath), List.of());
+			logWriter = new PrintWriter(new FileOutputStream(new File(logFilePath),true));
+		} finally {
+			logLock.writeLock().unlock();
+		}
 	}
 }

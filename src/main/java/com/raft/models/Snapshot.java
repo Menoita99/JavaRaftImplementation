@@ -31,6 +31,7 @@ public class Snapshot implements Serializable{
 		state.getLock().lock();
 		try(ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(new File(state.getRootPath()+File.separator+SNAP_FILE_NAME)))){
 			out.writeObject(state);
+			state.clearLogFile();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}finally {
