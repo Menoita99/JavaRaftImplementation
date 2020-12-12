@@ -81,23 +81,23 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 	private String root; 
 
-	private long lastRestrat;
+	private long lastRestart;
 
 
 
 	public Server(String root, boolean monitorMode) throws Exception{
 		this.root = root;
-		
-		//snapshot path acquired	
 		//check if the File exists if so recover the state from the File		
 		state = new File(root + "/" + Snapshot.SNAP_FILE_NAME).exists() ? Snapshot.recoverfromFile(root) : new ServerState(root);
 		//check log file and recover the entry list
-		List<Entry> collect = Files.lines(Paths.get(state.getLogFilePath())).map(e -> Entry.fromString(e)).collect(Collectors.toList());
+		List<Entry> entries = Files.lines(Paths.get(state.getLogFilePath())).map(e -> Entry.fromString(e)).collect(Collectors.toList());
 		//submit the entry list
-		state.getInterpreter().submit(collect);
-		//wait for the result of the last entry
-		state.getInterpreter().getCommandResult(collect.get(collect.size()-1).getCommandID(), 0);
-		System.out.println("State Recovered");
+		if(!entries.isEmpty()) {
+			state.getInterpreter().submit(entries);
+			//wait for the result of the last entry
+			state.getInterpreter().getCommandResult(entries.get(entries.size()-1).getCommandID(), 0);
+		}
+		System.out.println("State Recovered -> processed "+entries.size()+" entries to recover");
 		
 		readIni();
 		registServer();
@@ -268,7 +268,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		this.leaderId = leaderId;
 
 		boolean hasPreviousLog = state.hasLog(prevEntryTerm,prevEntryIndex);
-		long start = System.currentTimeMillis();
+//		long start = System.currentTimeMillis();
 		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
@@ -289,8 +289,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 			if(leaderCommit > state.getCommitIndex())
 				state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
-			System.out.println("Time to evaluate: "+(System.currentTimeMillis()-start)+" "+entries.size()+" entries");
-			System.out.println("----------------------------------------");
+//			System.out.println("Time to evaluate: "+(System.currentTimeMillis()-start)+" "+entries.size()+" entries");
+//			System.out.println("----------------------------------------");
 		}
 		if(monitorClient != null && !entries.isEmpty())
 			monitorClient.updateStatus();
@@ -398,16 +398,17 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * between minTimeOut and maxTimeOut
 	 */
 	private void restartTimer() {
-		lastRestrat = System.currentTimeMillis();
+		lastRestart = System.currentTimeMillis();
 		timer.cancel();
 		timer = new Timer();
 		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
+		System.out.println("RESTART IN "+timeOut);
 		timer.schedule(new TimerTask() {
 			public void run() {
-				if(System.currentTimeMillis()-lastRestrat > timeOut)
+				if(System.currentTimeMillis()-lastRestart > timeOut)
 					startElection();
 				else
-					restartTimer(System.currentTimeMillis()-lastRestrat-timeOut);
+					restartTimer(System.currentTimeMillis()-lastRestart-timeOut);
 			}
 		}, timeOut);
 	}
@@ -419,12 +420,13 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 */
 	private void restartTimer(long timeOut) {
 		long timeout = (long)Math.max(0, timeOut);
-		lastRestrat = System.currentTimeMillis();
+		lastRestart = System.currentTimeMillis();
 		timer.cancel();
 		timer = new Timer();
+		System.out.println("RESTART IN "+timeout);
 		timer.schedule(new TimerTask() {
 			public void run() {
-				long time = System.currentTimeMillis()-lastRestrat;
+				long time = System.currentTimeMillis()-lastRestart;
 				if(time > timeout)
 					startElection();
 				else
@@ -528,11 +530,21 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * @throws RemoteException extends Remote Interface
 	 */
 	@Override
-	public long InstallSnapshot(long term, Address leaderId, long lastIncludedIndex, long lastIncludedTerm, long offset,byte[] data, boolean done) {
+	public boolean InstallSnapshot(long term, Address leaderId,Snapshot snapshot) {
 		this.leaderId = leaderId;
-		shouldBecameFollower(term);
-		// TODO Auto-generated method stub
-		return 0;
+		
+		if(term<state.getCurrentTerm())
+			return false;
+		
+		snapshot.getState().setRootPath(root);
+		snapshot.snap();
+		try {
+			this.state = Snapshot.recoverfromFile(root);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+		return true;
 	}
 
 

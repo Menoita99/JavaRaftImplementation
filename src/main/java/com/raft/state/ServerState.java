@@ -62,7 +62,7 @@ public class ServerState implements Serializable{
 
 	private Interpreter interpreter = new Interpreter();
 
-	private long entryCounter;
+	private long entryCounter = 0;
 
 	private String rootPath;
 
@@ -94,21 +94,23 @@ public class ServerState implements Serializable{
 		stateProperties = new Properties();
 		stateProperties.load(new FileInputStream(stateFilePath));
 
-		setCurrentTerm(Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0")));
-		setVotedFor(Address.parse((String) stateProperties.getOrDefault("votedFor", "")));
+		long fileTerm = Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0"));
+		if(currentTerm == 0 || fileTerm!=0) {
+			setCurrentTerm(fileTerm);
+			setVotedFor(Address.parse((String) stateProperties.getOrDefault("votedFor", "")));
+		}
 
 		try(ReversedLinesFileReader reader = new ReversedLinesFileReader(new File(logFilePath),Charset.defaultCharset())){
 			Entry last = Entry.fromString(reader.readLine());
-			if(last == null)
+			if(last == null && lastEntry == null) {
 				last = new Entry(0,0,null,null);
-			lastEntry = last;
-			lastAplied = last;
-			commitIndex = lastAplied.getIndex();
+				lastEntry = last;
+				lastAplied = last;
+				commitIndex = lastAplied.getIndex();
+			}
 			reader.close();
 		}
 		logWriter = new PrintWriter(new FileOutputStream(new File(logFilePath),true));
-
-		entryCounter=0;
 	}
 
 
@@ -205,18 +207,11 @@ public class ServerState implements Serializable{
 	}
 
 
-	//TO TEST
-	public static void main(String[] args) throws IOException {
-		ServerState st = new ServerState( "src/main/resources/Server1000");
-		st.assessSnapshot(150_000);
-	}
-	
-	
-	
+
 
 	public void assessSnapshot(long size) {
 		entryCounter = entryCounter + size;
-		if (entryCounter >= 150_000) {
+		if (entryCounter >= 10_000) {
 			entryCounter = 0;
 			new Thread(snapshot::snap).start();
 		}

@@ -28,7 +28,6 @@ public class Interpreter implements Serializable{
 
 
 	public void submit(List<Entry> entries) { 
-		System.out.println(pool.getWorkers()[0].getState());
 		pool.submit(new Task(() -> this.execute(entries)));
 	}
 
@@ -37,7 +36,6 @@ public class Interpreter implements Serializable{
 	private synchronized void execute(List<Entry> entries) {
 		entries.sort((Entry o1, Entry o2)-> (int)o1.getIndex()- (int)o2.getIndex());
 		for (Entry entry : entries) {
-			System.out.println(entry);
 			Operation operation = null;
 			try {
 				operation = new Operation(entry.getCommandID(), shell(entry.getCommand()));
@@ -92,7 +90,7 @@ public class Interpreter implements Serializable{
 		Operation op = operationsMap.getOrDefault(clientIp,null);
 		while(op == null || !op.getOperationID().equals(commandId)) {
 			wait(timeOut);
-			if((System.currentTimeMillis()-startTime)>= timeOut)
+			if((System.currentTimeMillis()-startTime)>= timeOut && timeOut>0)
 				throw new TimeoutException();
 			op = operationsMap.getOrDefault(clientIp,null);
 		}

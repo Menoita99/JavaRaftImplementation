@@ -2,8 +2,6 @@ package com.raft.util;
 
 import java.io.Serializable;
 
-import lombok.Data;
-@Data
 public class ThreadPool  implements Serializable{
 	
 	private static final long serialVersionUID = 1L;
@@ -19,6 +17,17 @@ public class ThreadPool  implements Serializable{
 		}
 	}
 	
+	
+	public void resuscitateDeadWorkers() {
+		for (int i = 0; i < workers.length; i++) {
+			if(!workers[i].isAlive()) {
+				workers[i] = new Worker();
+				workers[i].start();
+			}
+		}
+	}
+	
+	
 	public void submit(Runnable task){
 		assert(task != null);
 		try {
@@ -32,13 +41,13 @@ public class ThreadPool  implements Serializable{
 	 * @return returns true if at least one worker is waiting for a task
 	 */
 	public boolean isWorkerAvailable() {
-		for (Worker worker : workers)
-			if(worker.getState() == Thread.State.BLOCKED || worker.getState() == Thread.State.WAITING)
+		for (Worker worker : workers) 
+			if((worker.getState() == Thread.State.BLOCKED || worker.getState() == Thread.State.WAITING) && worker.isAlive())
 				return true;
 		return false;
 	}
 	
-	public class Worker extends Thread implements Serializable{
+	private class Worker extends Thread implements Serializable{
 		
 		private static final long serialVersionUID = 1L;
 		

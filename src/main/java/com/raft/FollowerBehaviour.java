@@ -7,6 +7,7 @@ import java.util.List;
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
 import com.raft.models.Entry;
+import com.raft.models.Snapshot;
 /**
  * Class the represents the behaviour of a server when it is in Follower mode
  * @author RuiMenoita
@@ -45,5 +46,5 @@ public interface FollowerBehaviour extends Remote{
 	 * @return currentTerm, for leader to update itself
 	 * @throws RemoteException extends Remote Interface
 	 */
-	public long InstallSnapshot(long term, Address leaderId,long lastIncludedIndex,long lastIncludedTerm,long offset, byte[] data, boolean done) throws RemoteException;
+	public boolean InstallSnapshot(long term, Address leaderId,Snapshot snapshot) throws RemoteException;
 }

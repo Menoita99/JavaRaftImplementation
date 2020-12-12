@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.time.LocalDateTime;
 
 import com.raft.state.ServerState;
 
@@ -31,6 +32,7 @@ public class Snapshot implements Serializable{
 		state.getLock().lock();
 		try(ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(new File(state.getRootPath()+File.separator+SNAP_FILE_NAME)))){
 			out.writeObject(state);
+			System.out.println("[Snapshot] Made snapshot "+LocalDateTime.now());
 			state.clearLogFile();
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -45,13 +47,8 @@ public class Snapshot implements Serializable{
 		try(ObjectInputStream in = new ObjectInputStream(new FileInputStream(new File(path+File.separator+SNAP_FILE_NAME)))){
 			ServerState state = (ServerState) in.readObject();
 			state.init();
+			state.getInterpreter().getPool().resuscitateDeadWorkers();
 			return state;
 		}
-	}
-	
-	//TO TEST
-	public static void main(String[] args) throws Exception {
-		ServerState recoverfromFile = recoverfromFile("src/main/resources/Server1000");
-		System.out.println(recoverfromFile.getLock());
 	}
 }
