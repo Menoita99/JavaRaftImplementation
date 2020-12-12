@@ -2,6 +2,8 @@ package com.raft.util;
 
 import java.io.Serializable;
 
+import lombok.Data;
+@Data
 public class ThreadPool  implements Serializable{
 	
 	private static final long serialVersionUID = 1L;
@@ -36,7 +38,7 @@ public class ThreadPool  implements Serializable{
 		return false;
 	}
 	
-	private class Worker extends Thread implements Serializable{
+	public class Worker extends Thread implements Serializable{
 		
 		private static final long serialVersionUID = 1L;
 		

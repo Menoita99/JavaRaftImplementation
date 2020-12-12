@@ -28,3 +28,5 @@ target/classes/com/raft/Server$1.class
 target/classes/com/client/Client.class
 src/main/resources/state.conf
 .classpath
+.classpath
+.settings/org.eclipse.jdt.core.prefs

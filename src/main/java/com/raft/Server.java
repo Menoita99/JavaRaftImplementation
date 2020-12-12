@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.rmi.AccessException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.Naming;
@@ -25,12 +27,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import com.monitor.MonitorClient;
 import com.raft.models.Address;
 import com.raft.models.AppendResponse;
 import com.raft.models.Entry;
 import com.raft.models.ServerResponse;
+import com.raft.models.Snapshot;
 import com.raft.models.VoteResponse;
 import com.raft.state.Mode;
 import com.raft.state.ServerState;
@@ -42,7 +46,7 @@ import lombok.Setter;
 @Setter
 public class Server extends Leader implements Serializable, FollowerBehaviour{
 
-	public static final String CONFIG_INI = "config.ini";
+	public static final String CONFIG_INI = "config.ini"; 
 
 	public int heartbeatTimeOut;
 
@@ -81,9 +85,20 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 
-	public Server(String root, boolean monitorMode) throws IOException, AlreadyBoundException{
+	public Server(String root, boolean monitorMode) throws Exception{
 		this.root = root;
-		state = new ServerState(root);
+		
+		//snapshot path acquired	
+		//check if the File exists if so recover the state from the File		
+		state = new File(root + "/" + Snapshot.SNAP_FILE_NAME).exists() ? Snapshot.recoverfromFile(root) : new ServerState(root);
+		//check log file and recover the entry list
+		List<Entry> collect = Files.lines(Paths.get(state.getLogFilePath())).map(e -> Entry.fromString(e)).collect(Collectors.toList());
+		//submit the entry list
+		state.getInterpreter().submit(collect);
+		//wait for the result of the last entry
+		state.getInterpreter().getCommandResult(collect.get(collect.size()-1).getCommandID(), 0);
+		System.out.println("State Recovered");
+		
 		readIni();
 		registServer();
 		tryToConnect(true);
