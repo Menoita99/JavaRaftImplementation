@@ -20,10 +20,9 @@ import com.raft.models.Address;
 import com.raft.models.Entry;
 import com.raft.models.Snapshot;
 
-import lombok.AccessLevel;
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.ToString.Exclude;
+
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -44,12 +43,8 @@ public class ServerState implements Serializable{
 	private String stateFilePath = "src/main/resources/"+STATE_FILE;
 	private String logFilePath = "src/main/resources/"+LOG_FILE;
 
-	@Setter(value = AccessLevel.NONE)
-	@Getter(value = AccessLevel.NONE)
-	private Properties stateProperties;
-	@Setter(value = AccessLevel.NONE)
-	@Getter(value = AccessLevel.NONE)
-	private PrintWriter logWriter;
+	private transient Properties stateProperties;
+	private transient PrintWriter logWriter;
 
 	//Stable state
 	private long currentTerm = 0;
@@ -66,14 +61,22 @@ public class ServerState implements Serializable{
 	private ReentrantReadWriteLock logLock = new ReentrantReadWriteLock();
 
 	private Interpreter interpreter = new Interpreter();
-	
-	private int entryCounter;
+
+	private long entryCounter;
+
+	private String rootPath;
+
+	@Exclude
+	@lombok.EqualsAndHashCode.Exclude
+	private Snapshot snapshot;
 
 
 	public ServerState(String rootPath) throws IOException {
+		this.rootPath = rootPath;
 		stateFilePath = rootPath+File.separator+STATE_FILE;
 		logFilePath = rootPath+File.separator+LOG_FILE;
 		init(); 
+		snapshot = new Snapshot(this);
 	}
 
 
@@ -84,7 +87,7 @@ public class ServerState implements Serializable{
 	 * @throws IOException
 	 * @throws FileNotFoundException
 	 */
-	private void init() throws IOException, FileNotFoundException {
+	public void init() throws IOException, FileNotFoundException {
 		new File(stateFilePath).createNewFile();
 		new File(logFilePath).createNewFile();
 
@@ -104,7 +107,7 @@ public class ServerState implements Serializable{
 			reader.close();
 		}
 		logWriter = new PrintWriter(new FileOutputStream(new File(logFilePath),true));
-		
+
 		entryCounter=0;
 	}
 
@@ -194,30 +197,32 @@ public class ServerState implements Serializable{
 			commitIndex = index;
 			interpreter.submit(commitedEntries);
 			log.removeAll(commitedEntries);
-			
-			assessSnapshot();
+
+			assessSnapshot(commitedEntries.size());
 		}finally {
 			lock.unlock();
 		}
 	}
 
 
-	private void assessSnapshot() {
-		if (entryCounter == 1000) {
-			entryCounter=0;
-			new Thread(()->{
-				Snapshot snapshot = new Snapshot(this);
-				snapshot.snap();
-				snapshot.save();
-				
-			}).start();
-		}
-		else {
-			entryCounter++;
-		}
+	//TO TEST
+	public static void main(String[] args) throws IOException {
+		ServerState st = new ServerState( "src/main/resources/Server1000");
+		st.assessSnapshot(2000);
 	}
 	
-	
+
+	public void assessSnapshot(long size) {
+		entryCounter = entryCounter + size;
+		if (entryCounter >= 1000) {
+			entryCounter = 0;
+			new Thread(snapshot::snap).start();
+		}
+	}
+
+
+
+
 
 	private void saveEntries(List<Entry> commitedEntries) {
 		try {
@@ -302,9 +307,9 @@ public class ServerState implements Serializable{
 
 	}
 
-	
-	
-	
+
+
+
 
 
 	public List<Entry> getEntriesSince(long nextIndex, int chunckSize) {

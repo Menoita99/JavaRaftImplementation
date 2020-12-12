@@ -1,9 +1,12 @@
 package com.raft.util;
 
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Queue;
 
-public class BlockingQueue<T> {
+public class BlockingQueue<T>  implements Serializable{
+	
+	private static final long serialVersionUID = 1L;
 
 	private Queue<T> queue= new ArrayDeque<T>();
 	private final int capacity;

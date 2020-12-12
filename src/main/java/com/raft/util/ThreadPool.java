@@ -1,7 +1,10 @@
 package com.raft.util;
 
+import java.io.Serializable;
 
-public class ThreadPool {
+public class ThreadPool  implements Serializable{
+	
+	private static final long serialVersionUID = 1L;
 	
 	private BlockingQueue<Runnable> tasks = new BlockingQueue<>();
 	private Worker[] workers;
@@ -33,7 +36,9 @@ public class ThreadPool {
 		return false;
 	}
 	
-	private class Worker extends Thread{
+	private class Worker extends Thread implements Serializable{
+		
+		private static final long serialVersionUID = 1L;
 		
 		 @Override
 		public void run() {

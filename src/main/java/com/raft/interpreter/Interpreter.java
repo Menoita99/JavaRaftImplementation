@@ -1,6 +1,7 @@
 package com.raft.interpreter;
 
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,15 +17,14 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-public class Interpreter {
+public class Interpreter implements Serializable{
 
+	private static final long serialVersionUID = 1L;
 	private ThreadPool pool = new ThreadPool(1);
-	String lis ="";
-
 
 	private Map<String, Operation> operationsMap = new HashMap<String, Operation>();
 	// Keys and values should be strings
-	private Map<String, String> keyStore = new HashMap<String, String>();
+	private HashMap<String, String> keyStore = new HashMap<String, String>();
 
 
 	public void submit(List<Entry> entries) { 
@@ -63,12 +63,10 @@ public class Interpreter {
 				keyStore.remove(v[1], v[2]);
 				return "Removed:" + v[1] + ":" + v[2];
 			case "lis":
-				lis ="";
-				keyStore.entrySet().forEach(entry->{
-					String a = entry.getKey() + ":" + entry.getValue();
-					lis += a+"\n";
-				});			//sysout de tudo	
-				break;
+				String lis ="";
+				for(java.util.Map.Entry<String, String> key: keyStore.entrySet()) 
+					lis += key.getKey() + ":" + key.getValue()+"\n";
+				return lis;
 			case "cas":
 				// v  1, 2,   3
 				//cas(K,Vold,Vnew)
