@@ -51,34 +51,33 @@ public class Interpreter implements Serializable{
 
 	private Object shell(String command) {
 		String[] v = command.split(":");
-		if(v.length>=2)
-			switch(v[0]) {
-			case "put":
-				keyStore.put(v[1], v[2]);
-				return "Added: " + v[1] + ":" + v[2];
-			case "get":
-				return keyStore.get(v[1]);
-			case "del":
-				keyStore.remove(v[1], v[2]);
-				return "Removed:" + v[1] + ":" + v[2];
-			case "lis":
-				String lis ="";
-				for(java.util.Map.Entry<String, String> key: keyStore.entrySet()) 
-					lis += key.getKey() + ":" + key.getValue()+"\n";
-				return lis;
-			case "cas":
-				// v  1, 2,   3
-				//cas(K,Vold,Vnew)
-				//				x=get(K); 
-				//				if(x==Vold) 
-				//					put(K,Vnew); 
-				//				return x;
-				String x = keyStore.get(v[1]);
-				if(x==v[2]) {
-					keyStore.put(v[1], v[3]);
-				}
-				return x;
+		switch(v[0]) {
+		case "put":
+			keyStore.put(v[1], v[2]);
+			return "Added: " + v[1] + ":" + v[2];
+		case "get":
+			return keyStore.get(v[1]);
+		case "del":
+			keyStore.remove(v[1], v[2]);
+			return "Removed:" + v[1] + ":" + v[2];
+		case "lis":
+			String lis ="";
+			for(java.util.Map.Entry<String, String> key: keyStore.entrySet()) 
+				lis += key.getKey() + ":" + key.getValue()+",";
+			return lis;
+		case "cas":
+			// v  1, 2,   3
+			//cas(K,Vold,Vnew)
+			//				x=get(K); 
+			//				if(x==Vold) 
+			//					put(K,Vnew); 
+			//				return x;
+			String x = keyStore.get(v[1]);
+			if(x.equals(v[2])) {
+				keyStore.put(v[1], v[3]);
 			}
+			return x;
+		}
 		return "something wrong is not right";
 	}
 
