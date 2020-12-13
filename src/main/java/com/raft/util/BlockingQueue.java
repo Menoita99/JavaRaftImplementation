@@ -11,6 +11,8 @@ public class BlockingQueue<T>  implements Serializable{
 	private Queue<T> queue= new ArrayDeque<T>();
 	private final int capacity;
 
+	private int discardLimit = -1;
+
 	public BlockingQueue() {
 		capacity=-1;	
 	}
@@ -19,8 +21,15 @@ public class BlockingQueue<T>  implements Serializable{
 		if(c<=0)	throw new IllegalArgumentException("Invalid Size");
 		capacity=c;			
 	}
+	
+	public void setDiscardLimit(int n) {
+		this.discardLimit  = n;
+	}
 
 	public synchronized void Offer(T e) throws InterruptedException {
+		if(discardLimit>0 && queue.size() > discardLimit)
+			return;
+		
 		assert(e !=null);
 		while(queue.size()>capacity && capacity!=-1) 
 			wait();
@@ -51,4 +60,5 @@ public class BlockingQueue<T>  implements Serializable{
 	public String toString() {
 		return "BlockingQueue [queue=" + queue + ", capacity=" + capacity + "]";
 	}
+
 }

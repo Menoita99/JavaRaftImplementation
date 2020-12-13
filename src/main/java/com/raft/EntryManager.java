@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.raft.models.AppendResponse;
 import com.raft.models.Entry;
+import com.raft.models.Snapshot;
 import com.raft.models.Task;
 import com.raft.state.Mode;
 import com.raft.state.ServerState;
@@ -154,6 +155,7 @@ public class EntryManager {
 					threads.get(follower).submit(new Task(()-> resendTo(follower, response)));
 			}else {
 				ThreadPool pool = new ThreadPool(1);
+				pool.setDiscardLimit(1);
 				threads.put(follower, pool);
 				if(pool.isWorkerAvailable())
 					pool.submit(new Task(()-> resendTo(follower, response)));
@@ -161,33 +163,41 @@ public class EntryManager {
 		}
 
 
+		//TODO FIND BETTER SOLUTION
+		private LinkedList<Entry> resEntries;
 
 		private void resendTo(FollowerBehaviour follower, AppendResponse response) {
-			do {
-				try {
-					LinkedList<Entry> resEntries =  new LinkedList<>(state.getEntriesSince(response.getLastEntry().getIndex()+1,CHUNCK_SIZE));
+			try {
+				resEntries =  state.getEntriesSince(response.getLastEntry().getIndex()+1,CHUNCK_SIZE);
+				System.out.println("SENDING "+response.getLastEntry().getIndex());
+				state.getLock().lock();
+				long term = state.getCurrentTerm();
+				long prevLogIndex = response.getLastEntry().getIndex();
+				long prevLogTerm = response.getLastEntry().getTerm();
+				long leaderCommit = state.getCommitIndex();
+				state.getLock().unlock();
 
-					state.getLock().lock();
-					long term = state.getCurrentTerm();
-					long prevLogIndex = response.getLastEntry().getIndex();
-					long prevLogTerm = response.getLastEntry().getTerm();
-					long leaderCommit = state.getCommitIndex();
-					state.getLock().unlock();
+				//send checkpoint
+				if(resEntries == null) {
+					ServerState snapState = Snapshot.recoverFromFile(server.getRoot());
+					follower.InstallSnapshot(term, server.getSelfId(), new Snapshot(snapState));
+					resEntries = new LinkedList<>();
+				}else if(resEntries.size()< CHUNCK_SIZE)
+					resEntries.addAll(entries);
 
-					if(resEntries.size()< CHUNCK_SIZE)
-						resEntries.addAll(entries);
 
-					response = executor.submit(() ->follower.appendEntries(term, server.getSelfId(), prevLogIndex, prevLogTerm, resEntries, leaderCommit)).get(server.getTimeOutVote(), TimeUnit.MILLISECONDS);
+				response = executor.submit(() ->follower.appendEntries(term, server.getSelfId(), prevLogIndex, prevLogTerm, resEntries, leaderCommit)).get(server.getTimeOutVote(), TimeUnit.MILLISECONDS);
 
-					if(response.getTerm() > state.getCurrentTerm() || 
-							(response.getTerm() == state.getCurrentTerm() && response.getLastEntry().getIndex() > state.getLastEntry().getIndex()))
-						server.setMode(Mode.FOLLOWER);
-					
-				} catch (Exception e) {
-					e.printStackTrace();
-					continue;
+				if(response.getTerm() > state.getCurrentTerm() || 
+						(response.getTerm() == state.getCurrentTerm() && response.getLastEntry().getIndex() > state.getLastEntry().getIndex())) {
+					System.out.println( response.getLastEntry());
+					System.out.println(state.getLastEntry());
+					server.setMode(Mode.FOLLOWER);
 				}
-			}while(server.getMode() == Mode.LEADER && !response.isSuccess());
+
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
 	}
 }

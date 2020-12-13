@@ -6,8 +6,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.net.MalformedURLException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.rmi.AccessException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.Naming;
@@ -27,7 +25,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import com.monitor.MonitorClient;
 import com.raft.models.Address;
@@ -81,24 +78,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 	private String root; 
 
-	private long lastRestart;
 
 
 
 	public Server(String root, boolean monitorMode) throws Exception{
 		this.root = root;
 		//check if the File exists if so recover the state from the File		
-		state = new File(root + "/" + Snapshot.SNAP_FILE_NAME).exists() ? Snapshot.recoverfromFile(root) : new ServerState(root);
-		//check log file and recover the entry list
-		List<Entry> entries = Files.lines(Paths.get(state.getLogFilePath())).map(e -> Entry.fromString(e)).collect(Collectors.toList());
-		//submit the entry list
-		if(!entries.isEmpty()) {
-			state.getInterpreter().submit(entries);
-			//wait for the result of the last entry
-			state.getInterpreter().getCommandResult(entries.get(entries.size()-1).getCommandID(), 0);
-		}
-		System.out.println("State Recovered -> processed "+entries.size()+" entries to recover");
-		
+		state = new File(root + "/" + Snapshot.SNAP_FILE_NAME).exists() ? Snapshot.recoverAndInitFromFile(root) : new ServerState(root);
+
 		readIni();
 		registServer();
 		tryToConnect(true);
@@ -268,7 +255,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		this.leaderId = leaderId;
 
 		boolean hasPreviousLog = state.hasLog(prevEntryTerm,prevEntryIndex);
-//		long start = System.currentTimeMillis();
+		//		long start = System.currentTimeMillis();
 		if(hasPreviousLog){
 			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
@@ -286,11 +273,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 					}
 				}
 			}
-
+//
+//			System.out.println("leaderCommit "+leaderCommit);
+//			System.out.println("state commit "+state.getLastEntry().getIndex());
+//			System.out.println("commit "+ (leaderCommit > state.getCommitIndex()));
 			if(leaderCommit > state.getCommitIndex())
 				state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
-//			System.out.println("Time to evaluate: "+(System.currentTimeMillis()-start)+" "+entries.size()+" entries");
-//			System.out.println("----------------------------------------");
+			//			System.out.println("Time to evaluate: "+(System.currentTimeMillis()-start)+" "+entries.size()+" entries");
+			//			System.out.println("----------------------------------------");
 		}
 		if(monitorClient != null && !entries.isEmpty())
 			monitorClient.updateStatus();
@@ -398,42 +388,16 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * between minTimeOut and maxTimeOut
 	 */
 	private void restartTimer() {
-		lastRestart = System.currentTimeMillis();
 		timer.cancel();
 		timer = new Timer();
 		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
-		System.out.println("RESTART IN "+timeOut);
 		timer.schedule(new TimerTask() {
 			public void run() {
-				if(System.currentTimeMillis()-lastRestart > timeOut)
 					startElection();
-				else
-					restartTimer(System.currentTimeMillis()-lastRestart-timeOut);
 			}
 		}, timeOut);
 	}
 
-
-	/**
-	 * Restarts the timer that will trigger an election with the given value 
-	 * @param timeout time in mills
-	 */
-	private void restartTimer(long timeOut) {
-		long timeout = (long)Math.max(0, timeOut);
-		lastRestart = System.currentTimeMillis();
-		timer.cancel();
-		timer = new Timer();
-		System.out.println("RESTART IN "+timeout);
-		timer.schedule(new TimerTask() {
-			public void run() {
-				long time = System.currentTimeMillis()-lastRestart;
-				if(time > timeout)
-					startElection();
-				else
-					restartTimer(time-timeout);
-			}
-		}, timeout);
-	}
 
 
 
@@ -498,7 +462,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 				monitorClient.updateStatus();
 
 			try {
-				serverResponse.setResponse(state.getInterpreter().getCommandResult(commandID, 1000000));
+				serverResponse.setResponse(state.getInterpreter().getCommandResult(commandID,0));
 			} catch (TimeoutException | InterruptedException e) {
 				serverResponse.setResponse(e);
 				e.printStackTrace();
@@ -513,37 +477,25 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 
-	/*
-	 *This method may chance it's parameters since using Java RMI we don't  need chunks and data because Java RMI handles
-	 *low level connection issues for us 
-	 */
-	/**
-	 * Method Invoked by leader to send chunks of a snapshot to a follower. Leaders always send chunks in order.
-	 * @param term leader�s term
-	 * @param leaderId so follower can redirect clients
-	 * @param lastIncludedIndex the snapshot replaces all entries up through and including this index
-	 * @param lastIncludedTerm term of lastIncludedIndex
-	 * @param offset byte offset where chunk is positioned in the snapshot file
-	 * @param data raw bytes of the snapshot chunk, starting at offset
-	 * @param done true if this is the last chunk
-	 * @return currentTerm, for leader to update itself
-	 * @throws RemoteException extends Remote Interface
-	 */
 	@Override
 	public boolean InstallSnapshot(long term, Address leaderId,Snapshot snapshot) {
-		this.leaderId = leaderId;
-		
+		restartTimer();
 		if(term<state.getCurrentTerm())
 			return false;
-		
-		snapshot.getState().setRootPath(root);
-		snapshot.snap();
+		this.leaderId = leaderId;
+
 		try {
-			this.state = Snapshot.recoverfromFile(root);
+			System.out.println(snapshot.getState().getCommitIndex());
+			snapshot.getState().setRootPath(root);
+			state.close();
+			snapshot.snap();
+			state = Snapshot.recoverAndInitFromFile(root);
 		} catch (Exception e) {
 			e.printStackTrace();
 			return false;
 		}
+		if(monitorClient != null)
+			monitorClient.updateStatus();
 		return true;
 	}
 

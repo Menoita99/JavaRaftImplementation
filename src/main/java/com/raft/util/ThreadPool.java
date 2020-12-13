@@ -18,6 +18,14 @@ public class ThreadPool  implements Serializable{
 	}
 	
 	
+	
+	public void setDiscardLimit(int n) {
+		tasks.setDiscardLimit(n);
+	}
+	
+	
+	
+	
 	public void resuscitateDeadWorkers() {
 		for (int i = 0; i < workers.length; i++) {
 			if(!workers[i].isAlive()) {

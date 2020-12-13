@@ -11,6 +11,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Vector;
@@ -23,8 +24,9 @@ import com.raft.models.Snapshot;
 import lombok.Data;
 import lombok.ToString.Exclude;
 
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 
 import org.apache.commons.io.input.ReversedLinesFileReader;
 
@@ -50,15 +52,15 @@ public class ServerState implements Serializable{
 	private long currentTerm = 0;
 	private Address votedFor;
 	private long commitIndex = 0;
-	private Entry lastAplied;
+	private Entry lastAplied = new Entry(0,0,null,null);
 
 	// Volatile state
 	private Vector<Entry> log = new Vector<>();
-	private Entry lastEntry;
+	private Entry lastEntry = new Entry(0,0,null,null);
 
 	private ReentrantLock lock = new ReentrantLock();
-	private ReentrantReadWriteLock persistenceStateLock = new ReentrantReadWriteLock();
-	private ReentrantReadWriteLock logLock = new ReentrantReadWriteLock();
+	private ReentrantLock persistenceStateLock = new ReentrantLock();
+	private ReentrantLock logLock = new ReentrantLock();
 
 	private Interpreter interpreter = new Interpreter();
 
@@ -72,9 +74,7 @@ public class ServerState implements Serializable{
 
 
 	public ServerState(String rootPath) throws IOException {
-		this.rootPath = rootPath;
-		stateFilePath = rootPath+File.separator+STATE_FILE;
-		logFilePath = rootPath+File.separator+LOG_FILE;
+		setRootPath(rootPath);
 		init(); 
 		snapshot = new Snapshot(this);
 	}
@@ -87,30 +87,50 @@ public class ServerState implements Serializable{
 	 * @throws IOException
 	 * @throws FileNotFoundException
 	 */
-	public void init() throws IOException, FileNotFoundException {
-		new File(stateFilePath).createNewFile();
-		new File(logFilePath).createNewFile();
+	public void init() {
+		try {
+			new File(stateFilePath).createNewFile();
+			new File(logFilePath).createNewFile();
 
-		stateProperties = new Properties();
-		stateProperties.load(new FileInputStream(stateFilePath));
+			stateProperties = new Properties();
+			stateProperties.load(new FileInputStream(stateFilePath));
 
-		long fileTerm = Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0"));
-		if(currentTerm == 0 || fileTerm!=0) {
-			setCurrentTerm(fileTerm);
-			setVotedFor(Address.parse((String) stateProperties.getOrDefault("votedFor", "")));
-		}
-
-		try(ReversedLinesFileReader reader = new ReversedLinesFileReader(new File(logFilePath),Charset.defaultCharset())){
-			Entry last = Entry.fromString(reader.readLine());
-			if(last == null && lastEntry == null) {
-				last = new Entry(0,0,null,null);
-				lastEntry = last;
-				lastAplied = last;
-				commitIndex = lastAplied.getIndex();
+			long fileTerm = Long.parseLong((String) stateProperties.getOrDefault("currentTerm", "0"));
+			if(currentTerm == 0 || fileTerm!=0) {
+				setCurrentTerm(fileTerm);
+				setVotedFor(Address.parse((String) stateProperties.getOrDefault("votedFor", "")));
 			}
-			reader.close();
+
+			log.clear();
+			logWriter = new PrintWriter(new FileOutputStream(new File(logFilePath),true));
+
+			recoverState();
+		}catch (Exception e) {
+			e.printStackTrace();
 		}
-		logWriter = new PrintWriter(new FileOutputStream(new File(logFilePath),true));
+	}
+
+
+	private void recoverState() throws TimeoutException, InterruptedException, IOException {
+		//check log file and recover the entry list
+		List<Entry> entries = new LinkedList<>();
+		Files.lines(Paths.get(logFilePath)).forEach(line -> {
+			Entry e = Entry.fromString(line);
+			if(e!=null)
+				entries.add(e);
+		});
+		interpreter.getPool().resuscitateDeadWorkers();
+		//submit the entry list
+		if(!entries.isEmpty()) {
+			interpreter.submit(entries);
+			//wait for the result of the last entry
+			Entry last = entries.get(entries.size()-1);
+			interpreter.getCommandResult(last.getCommandID(), 0);
+			lastEntry = last;
+			lastAplied = last;
+			commitIndex = last.getIndex();
+		}
+		System.out.println("State Recovered -> processed "+entries.size()+" entries to recover");
 	}
 
 
@@ -121,7 +141,7 @@ public class ServerState implements Serializable{
 	 */
 	public void setCurrentTerm(long currentTerm) {
 		try {
-			persistenceStateLock.writeLock().lock();
+			persistenceStateLock.lock();
 			this.currentTerm = currentTerm;
 			stateProperties.setProperty("currentTerm", currentTerm+"");
 			stateProperties.store(new FileOutputStream(stateFilePath), null);
@@ -129,7 +149,7 @@ public class ServerState implements Serializable{
 		} catch (IOException e) {
 			e.printStackTrace();
 		}finally {
-			persistenceStateLock.writeLock().unlock();
+			persistenceStateLock.unlock();
 		}
 	}
 
@@ -141,14 +161,14 @@ public class ServerState implements Serializable{
 	 */
 	public void setVotedFor(Address votedFor) {
 		try {
-			persistenceStateLock.writeLock().lock();
+			persistenceStateLock.lock();
 			this.votedFor = votedFor;
 			stateProperties.setProperty("votedFor", votedFor == null ? "":votedFor.toFileString());
 			stateProperties.store(new FileOutputStream(stateFilePath), null);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}finally {
-			persistenceStateLock.writeLock().unlock();
+			persistenceStateLock.unlock();
 		}
 	}
 
@@ -175,6 +195,7 @@ public class ServerState implements Serializable{
 
 	public void setCommitIndex(long index) {
 		try {
+			//			System.out.println("Called commit Index");
 			lock.lock();
 
 			if(commitIndex>index)
@@ -184,7 +205,6 @@ public class ServerState implements Serializable{
 				throw new IllegalStateException("Last log index "+lastEntry.getIndex()+" can't be lower then commited log "+index);
 
 			List<Entry> commitedEntries = new ArrayList<>();
-			//			Vector<Entry> clone = (Vector<Entry>) log.clone();
 			log.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 
 			for (Entry entry : log) {
@@ -203,6 +223,7 @@ public class ServerState implements Serializable{
 			assessSnapshot(commitedEntries.size());
 		}finally {
 			lock.unlock();
+			//			System.out.println("Exiting commit Index");
 		}
 	}
 
@@ -213,7 +234,7 @@ public class ServerState implements Serializable{
 		entryCounter = entryCounter + size;
 		if (entryCounter >= 10_000) {
 			entryCounter = 0;
-			new Thread(snapshot::snap).start();
+			snapshot.snap();
 		}
 	}
 
@@ -223,11 +244,12 @@ public class ServerState implements Serializable{
 
 	private void saveEntries(List<Entry> commitedEntries) {
 		try {
-			logLock.writeLock().lock();
-			commitedEntries.forEach(entry -> logWriter.println(entry.toFileString()));
+			logLock.lock();
+			String content = commitedEntries.stream().map(e-> e.toFileString()).collect(Collectors.joining("\n"));
+			logWriter.println(content);
 			logWriter.flush();
 		}finally {
-			logLock.writeLock().unlock();
+			logLock.unlock();
 		}
 	}
 
@@ -252,7 +274,7 @@ public class ServerState implements Serializable{
 	 * @return true if there is this log in memory or false otherwise
 	 */
 	public boolean hasLog(long term, long index) {
-		return index > lastEntry.getIndex() ? false : getEntry(index).getTerm() == term;
+		return	index > lastEntry.getIndex() ? false : getEntry(index).getTerm() == term;
 	}
 
 
@@ -279,7 +301,7 @@ public class ServerState implements Serializable{
 			lock.unlock();
 		}
 
-		logLock.writeLock().lock();
+		logLock.lock();
 		try{
 			List<String> fileContent = new ArrayList<>(Files.readAllLines(Paths.get(logFilePath)));
 			for (int i = 0; i < fileContent.size(); i++) {
@@ -292,58 +314,58 @@ public class ServerState implements Serializable{
 
 			logWriter.close();
 			Files.write(Paths.get(logFilePath), fileContent);
-			logWriter = new PrintWriter(new FileOutputStream(new File(logFilePath),true));
+			logWriter =  new PrintWriter(new FileOutputStream(new File(logFilePath),true));
 			log.clear();
 			lastEntry = entry;
 			lastAplied = entry;
 		} catch (IOException e) {
 			e.printStackTrace();
 		}finally {
-			logLock.writeLock().unlock();
+			logLock.unlock();
 		}
 
 	}
 
 
 
-
-
-
-	public List<Entry> getEntriesSince(long nextIndex, int chunckSize) {
+	public LinkedList<Entry> getEntriesSince(long nextIndex, int chunckSize) {
+		if(chunckSize<=0) throw new IllegalStateException("Chunk must be bigger then 0");
 		if(nextIndex == 0) nextIndex = 1;
 
-		List<Entry> entries = new ArrayList<>();
+		LinkedList<Entry> entries = new LinkedList<>();
 
-		logLock.readLock().lock();
+		logLock.lock();
 		try(ReversedLinesFileReader reader = new ReversedLinesFileReader(new File(logFilePath),Charset.defaultCharset())){
 			String line = "";
+			long smalestIndex = Long.MAX_VALUE;
 			while((line = reader.readLine()) != null) {
-				Entry e =  Entry.fromString(line);
-				if((e.getIndex()>=nextIndex && chunckSize < 0) ||  (e.getIndex()>=nextIndex && e.getIndex()<nextIndex+chunckSize && chunckSize > 0 &&  entries.size() < chunckSize ))
-					entries.add(e);
-
-				if(chunckSize > 0 && entries.size() > chunckSize || (e.getIndex()<nextIndex && chunckSize < 0) )
-					break;
+				Entry e = Entry.fromString(line);
+				if(e != null) {
+					long index = e.getIndex();
+					if(index < chunckSize+nextIndex && index >= nextIndex && entries.size()<chunckSize) 
+						entries.add(e);
+					if(index < smalestIndex)
+						smalestIndex = index;
+				}
 			}
-		} catch (Exception e) {
+			if(smalestIndex>nextIndex) 
+				return null;
+		} catch (IOException e) {
 			e.printStackTrace();
 		}finally {
-			logLock.readLock().unlock();
+			logLock.unlock();
 		}
 
-
-		if(entries.size() < chunckSize || chunckSize < 0) {
-			if(entries.isEmpty())
+		if(entries.size()<chunckSize && !log.isEmpty()) {
+			log.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
+			Entry first = log.get(0);
+			if(entries.isEmpty() && first.getIndex() == nextIndex)
 				entries.addAll(log);
-			else {
-				log.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
-				if(log.get(0).getIndex() == entries.get(entries.size()-1).getIndex()+1)
-					entries.addAll(log);
-			}
-			if(entries.size() > chunckSize && chunckSize >=0)
+			else if(!entries.isEmpty() && first.getIndex() == entries.get(entries.size()-1).getIndex()+1)
+				entries.addAll(log);
+			if(entries.size()>chunckSize)
 				entries.subList(0, chunckSize);
 		}
-
 		return entries;
 	}
 
@@ -370,7 +392,7 @@ public class ServerState implements Serializable{
 			lock.unlock();
 		}
 
-		logLock.readLock().lock();
+		logLock.lock();
 		try(ReversedLinesFileReader reader = new ReversedLinesFileReader(new File(logFilePath),Charset.defaultCharset())){
 			String line = "";
 			while((line = reader.readLine()) != null) {
@@ -381,7 +403,7 @@ public class ServerState implements Serializable{
 		} catch (IOException e) {
 			e.printStackTrace();
 		}finally {
-			logLock.readLock().unlock();
+			logLock.unlock();
 		}
 
 		return null;
@@ -391,13 +413,32 @@ public class ServerState implements Serializable{
 
 
 	public void clearLogFile() throws IOException {
-		logLock.writeLock().lock();
+		logLock.lock();
 		try {
-			logWriter.close();
-			Files.write(Paths.get(logFilePath), List.of());
+			if(logWriter!= null)logWriter.close();
+			System.out.println("CLEARING LOG ");
+			File file = new File(logFilePath);
+			if(file.delete())
+				file.createNewFile();
 			logWriter = new PrintWriter(new FileOutputStream(new File(logFilePath),true));
 		} finally {
-			logLock.writeLock().unlock();
+			logLock.unlock();
 		}
+	}
+
+	
+	
+	
+	public void setRootPath(String path) {
+		rootPath = path;
+		stateFilePath = rootPath+"/"+STATE_FILE;
+		logFilePath = rootPath+"/"+LOG_FILE;
+	}
+	
+	
+	
+	
+	public void close(){
+		logWriter.close();
 	}
 }

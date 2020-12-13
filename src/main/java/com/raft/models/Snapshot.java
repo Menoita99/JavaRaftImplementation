@@ -29,26 +29,40 @@ public class Snapshot implements Serializable{
 	}
 	
 	public void snap() {
-		state.getLock().lock();
-		try(ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(new File(state.getRootPath()+File.separator+SNAP_FILE_NAME)))){
+		File file = new File(state.getRootPath()+File.separator+SNAP_FILE_NAME);
+		file.delete();
+		try(ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file))){
 			out.writeObject(state);
-			System.out.println("[Snapshot] Made snapshot "+LocalDateTime.now());
 			state.clearLogFile();
+			System.out.println("[Snapshot] Made snapshot "+LocalDateTime.now());
 		} catch (Exception e) {
 			e.printStackTrace();
-		}finally {
-			state.getLock().unlock();
 		}
 	}
 	
 	
 	
-	public static ServerState recoverfromFile(String path) throws Exception {
+	public static ServerState recoverAndInitFromFile(String path) throws Exception {
 		try(ObjectInputStream in = new ObjectInputStream(new FileInputStream(new File(path+File.separator+SNAP_FILE_NAME)))){
 			ServerState state = (ServerState) in.readObject();
 			state.init();
-			state.getInterpreter().getPool().resuscitateDeadWorkers();
 			return state;
 		}
+	}
+	
+	
+	
+	public static ServerState recoverFromFile(String path) throws Exception {
+		try(ObjectInputStream in = new ObjectInputStream(new FileInputStream(new File(path+File.separator+SNAP_FILE_NAME)))){
+			ServerState state = (ServerState) in.readObject();
+			return state;
+		}
+	}
+	
+	
+	
+	public static void main(String[] args) throws Exception {
+		ServerState sv = recoverAndInitFromFile("src/main/resources/Server1002");
+		System.out.println(sv.getCommitIndex());
 	}
 }

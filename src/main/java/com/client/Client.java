@@ -143,6 +143,12 @@ public class Client {
 		String commandID = generateCommandID(clientID);
 		boolean retry = true;
 		while(true) { 
+//			try {
+//				Thread.sleep(10);
+//			} catch (InterruptedException e1) {
+//				// TODO Auto-generated catch block
+//				e1.printStackTrace();
+//			}
 			if(!retry)
 				commandID = generateCommandID(clientID);
 			try {
