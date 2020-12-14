@@ -43,7 +43,11 @@ public class ClientController extends Application implements Initializable{
 		instance = this;
 		client = new Client();
 //		ipClient.setText(client.getAddress().getIpAddress());
-//		ipLeader.textProperty().bind((client.getLeaderIp()));
+		client.getLeaderAddress().addListener(( observable, oldValue, newValue)->{
+			ipLeader.setText(newValue.getIpAddress());
+			portLeader.setText(newValue.getPort()+"");
+		});
+//		ipLeader.textProperty().bind((client.getLeaderAddress().get()));
 //		portLeader.textProperty().bind((client.getLeaderPort()));
 		textArea.setEditable(false);
 	}

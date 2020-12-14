@@ -12,6 +12,7 @@ import com.raft.LeaderBehaviour;
 import com.raft.models.Address;
 import com.raft.models.ServerResponse;
 
+import javafx.beans.property.SimpleObjectProperty;
 import lombok.Data;
 
 @Data
@@ -20,7 +21,8 @@ public class Client {
 	private Address[] clusterArray;
 	private LeaderBehaviour leader;
 	private String clientID;
-	private Address leaderAddress;
+	
+	private SimpleObjectProperty<Address> leaderAddress = new SimpleObjectProperty<>();
 	
 	public Client() {
 		clientID = Address.getLocalIp();
@@ -96,7 +98,7 @@ public class Client {
 					
 					leader = (LeaderBehaviour) Naming.lookup("rmi://" + response.getLeader().getIpAddress() + ":" + response.getLeader().getPort() + "/leader");
 					response = leader.execute("", generateCommandID(clientID));
-					leaderAddress = address;
+					leaderAddress.set(address);
 					if (response.getResponse() == null) 
 						return;
 				}
