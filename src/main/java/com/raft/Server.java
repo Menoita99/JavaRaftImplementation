@@ -17,8 +17,6 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,6 +33,7 @@ import com.raft.models.Snapshot;
 import com.raft.models.VoteResponse;
 import com.raft.state.Mode;
 import com.raft.state.ServerState;
+import com.raft.util.OneSchedualTimer;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -69,14 +68,18 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	private HeartBeatSender heartBeatSender;
 
 	//This object will notify server when it must change mode to candidate and start an election
-	private Timer timer = new Timer();
+	private OneSchedualTimer scheduler;
 
 	private Address leaderId;
 	private Address selfId;
 
 	private MonitorClient monitorClient;
 
-	private String root; 
+	private String root;
+
+	private int chunckSize;
+
+
 
 
 
@@ -96,6 +99,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			monitorClient = new MonitorClient(this);
 			monitorClient.updateStatus();
 		}
+		scheduler = new OneSchedualTimer(this::startElection);
 		restartTimer();
 		System.out.println("Server "+selfId+" started");
 	}
@@ -134,6 +138,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		minTimeOut = Integer.parseInt(timeOutInterval[0]);
 
 		timeOutVote = Integer.parseInt(p.getProperty("timeOutVote"));
+		chunckSize=Integer.parseInt(p.getProperty("chunckSize"));
+
 	}
 
 
@@ -273,10 +279,10 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 					}
 				}
 			}
-//
-//			System.out.println("leaderCommit "+leaderCommit);
-//			System.out.println("state commit "+state.getLastEntry().getIndex());
-//			System.out.println("commit "+ (leaderCommit > state.getCommitIndex()));
+			//
+			//			System.out.println("leaderCommit "+leaderCommit);
+			//			System.out.println("state commit "+state.getLastEntry().getIndex());
+			//			System.out.println("commit "+ (leaderCommit > state.getCommitIndex()));
 			if(leaderCommit > state.getCommitIndex())
 				state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
 			//			System.out.println("Time to evaluate: "+(System.currentTimeMillis()-start)+" "+entries.size()+" entries");
@@ -285,6 +291,8 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		if(monitorClient != null && !entries.isEmpty())
 			monitorClient.updateStatus();
 
+		if(entries.size()>1)
+			System.out.println("My state last entry "+state.getLastEntry());
 		return new AppendResponse(state.getLastEntry(),state.getCurrentTerm(), hasPreviousLog);
 	}
 
@@ -311,15 +319,14 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 
 	/**
-	 * Method called by Timer when an election must be started
+	 * Method called by OneSchedualTimer when an election must be started
 	 */
 	public void startElection() {
 		if(mode == Mode.FOLLOWER || mode == Mode.CANDIDATE) {
-			timer.cancel();
-			tryToConnect(false);
-
+			scheduler.stop();
 			//Transition to candidate state
 			mode = Mode.CANDIDATE;
+			tryToConnect(false);
 
 			if(monitorClient != null)
 				monitorClient.startedElection();
@@ -352,6 +359,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 							votes++;							
 					}
 				} catch (Exception e) {
+					e.printStackTrace();
 					System.err.println("Counld not send request vote to: "+ clusterArray[i]);
 					clusterLeaderBehaviour[i] = null;
 					continue;
@@ -388,14 +396,11 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 	 * between minTimeOut and maxTimeOut
 	 */
 	private void restartTimer() {
-		timer.cancel();
-		timer = new Timer();
-		int timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
-		timer.schedule(new TimerTask() {
-			public void run() {
-					startElection();
-			}
-		}, timeOut);
+		long timeOut = new Random().nextInt(maxTimeOut-minTimeOut) +minTimeOut;
+		if(!scheduler.isBusy())
+			scheduler.schedual(timeOut);
+		else
+			scheduler.restart(timeOut);
 	}
 
 

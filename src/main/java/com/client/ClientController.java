@@ -42,7 +42,6 @@ public class ClientController extends Application implements Initializable{
 	public void initialize(URL location, ResourceBundle resources) {
 		instance = this;
 		client = new Client();
-//		ipClient.setText(client.getAddress().getIpAddress());
 		client.getLeaderAddress().addListener(( observable, oldValue, newValue)->{
 			ipLeader.setText(newValue.getIpAddress());
 			portLeader.setText(newValue.getPort()+"");

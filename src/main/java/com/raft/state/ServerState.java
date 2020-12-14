@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Vector;
 
+import com.raft.Server;
 import com.raft.interpreter.Interpreter;
 import com.raft.models.Address;
 import com.raft.models.Entry;
@@ -44,6 +45,7 @@ public class ServerState implements Serializable{
 
 	private String stateFilePath = "src/main/resources/"+STATE_FILE;
 	private String logFilePath = "src/main/resources/"+LOG_FILE;
+	private String initFilePath = "src/main/resources/"+Server.CONFIG_INI;
 
 	private transient Properties stateProperties;
 	private transient PrintWriter logWriter;
@@ -72,6 +74,8 @@ public class ServerState implements Serializable{
 	@lombok.EqualsAndHashCode.Exclude
 	private Snapshot snapshot;
 
+	private int entriesToSnapshot;
+
 
 	public ServerState(String rootPath) throws IOException {
 		setRootPath(rootPath);
@@ -89,6 +93,10 @@ public class ServerState implements Serializable{
 	 */
 	public void init() {
 		try {
+			Properties p = new Properties();
+			p.load(new FileInputStream(initFilePath));
+			entriesToSnapshot=Integer.parseInt(p.getProperty("entriesToSnapshot"));
+			
 			new File(stateFilePath).createNewFile();
 			new File(logFilePath).createNewFile();
 
@@ -232,7 +240,7 @@ public class ServerState implements Serializable{
 
 	public void assessSnapshot(long size) {
 		entryCounter = entryCounter + size;
-		if (entryCounter >= 10_000) {
+		if (entryCounter >= entriesToSnapshot) {
 			entryCounter = 0;
 			snapshot.snap();
 		}
@@ -274,7 +282,9 @@ public class ServerState implements Serializable{
 	 * @return true if there is this log in memory or false otherwise
 	 */
 	public boolean hasLog(long term, long index) {
-		return	index > lastEntry.getIndex() ? false : getEntry(index).getTerm() == term;
+		if(index > lastEntry.getIndex())return false;
+		Entry entry = getEntry(index);
+		return	entry == null ? false : entry.getTerm() == term;
 	}
 
 
@@ -328,6 +338,7 @@ public class ServerState implements Serializable{
 
 
 
+	@SuppressWarnings("unchecked")
 	public LinkedList<Entry> getEntriesSince(long nextIndex, int chunckSize) {
 		if(chunckSize<=0) throw new IllegalStateException("Chunk must be bigger then 0");
 		if(nextIndex == 0) nextIndex = 1;
@@ -356,13 +367,14 @@ public class ServerState implements Serializable{
 			logLock.unlock();
 		}
 
-		if(entries.size()<chunckSize && !log.isEmpty()) {
-			log.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
-			Entry first = log.get(0);
+		Vector<Entry> logClone = (Vector<Entry>) log.clone();
+		if(entries.size()<chunckSize && !logClone.isEmpty()) {
+			logClone.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
+			Entry first = logClone.get(0);
 			if(entries.isEmpty() && first.getIndex() == nextIndex)
-				entries.addAll(log);
+				entries.addAll(logClone);
 			else if(!entries.isEmpty() && first.getIndex() == entries.get(entries.size()-1).getIndex()+1)
-				entries.addAll(log);
+				entries.addAll(logClone);
 			if(entries.size()>chunckSize)
 				entries.subList(0, chunckSize);
 		}
@@ -433,6 +445,7 @@ public class ServerState implements Serializable{
 		rootPath = path;
 		stateFilePath = rootPath+"/"+STATE_FILE;
 		logFilePath = rootPath+"/"+LOG_FILE;
+		initFilePath = rootPath+"/"+Server.CONFIG_INI;
 	}
 	
 	

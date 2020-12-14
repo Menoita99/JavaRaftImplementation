@@ -94,7 +94,6 @@ public class Client {
 //				 If the Object of the ServerResponse instance is null, that means it received
 //				 the Address of the leader. Try reconnect to leader
 				if (response.getResponse() == null) {
-					System.out.println("Received message from follower, attempting leader connect: "+response.getLeader());
 					
 					leader = (LeaderBehaviour) Naming.lookup("rmi://" + response.getLeader().getIpAddress() + ":" + response.getLeader().getPort() + "/leader");
 					response = leader.execute("", generateCommandID(clientID));

@@ -95,7 +95,7 @@ public class Interpreter implements Serializable{
 
 
 	public synchronized Object getCommandResult(String commandId,long timeOut) throws TimeoutException, InterruptedException {
-		long startTime =System.currentTimeMillis();
+		long startTime = System.currentTimeMillis();
 		String clientIp =  commandId.split(":")[0];
 		Operation op = operationsMap.getOrDefault(clientIp,null);
 		while(op == null || !op.getOperationID().equals(commandId)) {

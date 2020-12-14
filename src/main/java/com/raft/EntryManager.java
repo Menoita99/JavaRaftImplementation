@@ -140,7 +140,6 @@ public class EntryManager {
 	 */
 	private class Resender{
 
-		private static final int CHUNCK_SIZE = 5000;
 		private ExecutorService  executor;
 
 		private HashMap<FollowerBehaviour,ThreadPool> threads = new HashMap<>();
@@ -168,7 +167,8 @@ public class EntryManager {
 
 		private void resendTo(FollowerBehaviour follower, AppendResponse response) {
 			try {
-				resEntries =  state.getEntriesSince(response.getLastEntry().getIndex()+1,CHUNCK_SIZE);
+				resEntries =  state.getEntriesSince(response.getLastEntry().getIndex()+1,server.getChunckSize());
+				System.out.println("--------------------------------------------------------------------------------------------------------------------");
 				System.out.println("SENDING "+response.getLastEntry().getIndex());
 				state.getLock().lock();
 				long term = state.getCurrentTerm();
@@ -182,7 +182,7 @@ public class EntryManager {
 					ServerState snapState = Snapshot.recoverFromFile(server.getRoot());
 					follower.InstallSnapshot(term, server.getSelfId(), new Snapshot(snapState));
 					resEntries = new LinkedList<>();
-				}else if(resEntries.size()< CHUNCK_SIZE)
+				}else if(resEntries.size()< server.getChunckSize())
 					resEntries.addAll(entries);
 
 
