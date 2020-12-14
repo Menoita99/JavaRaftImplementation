@@ -232,7 +232,7 @@ public class ServerState implements Serializable{
 
 	public void assessSnapshot(long size) {
 		entryCounter = entryCounter + size;
-		if (entryCounter >= 10_000) {
+		if (entryCounter >= 20_000) {
 			entryCounter = 0;
 			snapshot.snap();
 		}
