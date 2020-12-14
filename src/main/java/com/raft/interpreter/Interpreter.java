@@ -51,6 +51,7 @@ public class Interpreter implements Serializable{
 
 	private Object shell(String command) {
 		String[] v = command.split(":");
+		if(v.length>=2 || v[0].equals("lis"))
 		switch(v[0]) {
 		case "put":
 			keyStore.put(v[1], v[2]);
