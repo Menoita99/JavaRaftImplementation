@@ -4,9 +4,9 @@ package com.client;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.URL;
-import java.rmi.RemoteException;
 import java.util.ResourceBundle;
 
+import com.raft.models.Address;
 import com.raft.models.ServerResponse;
 
 import javafx.application.Application;
@@ -42,12 +42,13 @@ public class ClientController extends Application implements Initializable{
 	public void initialize(URL location, ResourceBundle resources) {
 		instance = this;
 		client = new Client();
-		client.getLeaderAddress().addListener(( observable, oldValue, newValue)->{
+		ipClient.setText(Address.getLocalIp());
+		ipLeader.setText(client.getLeaderAddress().get().getIpAddress());
+		portLeader.setText(client.getLeaderAddress().get().getPort()+"");
+		client.getLeaderAddress().addListener((observable, oldValue, newValue)->{
 			ipLeader.setText(newValue.getIpAddress());
 			portLeader.setText(newValue.getPort()+"");
 		});
-//		ipLeader.textProperty().bind((client.getLeaderAddress().get()));
-//		portLeader.textProperty().bind((client.getLeaderPort()));
 		textArea.setEditable(false);
 	}
  
@@ -70,7 +71,7 @@ public class ClientController extends Application implements Initializable{
 	    	textField.clear();
 	    	if(reponse.getResponse() == null) textArea.appendText("\n");
 	    	else textArea.appendText(reponse.getResponse().toString()+"\n");
-    	}catch (RemoteException e) {
+    	}catch (Exception e) {
     		showErrorDialog(e);
 		}
     }

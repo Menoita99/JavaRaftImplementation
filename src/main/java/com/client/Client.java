@@ -28,7 +28,6 @@ public class Client {
 		clientID = Address.getLocalIp();
 		readIni();
 		connectToServer();
-		
 	}
 
 
@@ -86,6 +85,7 @@ public class Client {
 	public void connectToServer() {
 		for (int i = 0; i < clusterArray.length; i++) {
 			Address address = clusterArray[i];
+			leaderAddress.set(address);
 			try { 
 
 				leader = (LeaderBehaviour) Naming.lookup("rmi://" + address.getIpAddress() + ":" + address.getPort() + "/leader");
@@ -94,10 +94,8 @@ public class Client {
 //				 If the Object of the ServerResponse instance is null, that means it received
 //				 the Address of the leader. Try reconnect to leader
 				if (response.getResponse() == null) {
-					
 					leader = (LeaderBehaviour) Naming.lookup("rmi://" + response.getLeader().getIpAddress() + ":" + response.getLeader().getPort() + "/leader");
 					response = leader.execute("", generateCommandID(clientID));
-					leaderAddress.set(address);
 					if (response.getResponse() == null) 
 						return;
 				}
@@ -106,7 +104,7 @@ public class Client {
 				continue;
 			}
 		}
-		System.out.println(leader == null ? "No leader Found" : "Connected");
+		System.out.println(leader == null ? "No leader Found" : "Connected to "+leaderAddress.get());
 	}
 
 
@@ -126,14 +124,11 @@ public class Client {
 				to_return = leader.execute(command, operationID);
 				break;
 			} catch (RemoteException | NullPointerException e) {
-				e.printStackTrace();
 				connectToServer();
 			}
 		}
-		if(to_return == null) {
+		if(to_return == null)
 			ClientController.getInstance().showErrorDialog("Failed to connect","Could not connect to leader. Please check your internet connection");
-			throw new  IllegalStateException("Unable to connect");
-		}
 		return to_return;
 	}
 	
