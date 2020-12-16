@@ -31,12 +31,15 @@ public class Snapshot implements Serializable{
 	public void snap() {
 		File file = new File(state.getRootPath()+File.separator+SNAP_FILE_NAME);
 		file.delete();
+		state.getLock().lock();
 		try(ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file))){
 			out.writeObject(state);
 			state.clearLogFile();
 			System.out.println("[Snapshot] Made snapshot "+LocalDateTime.now());
 		} catch (Exception e) {
 			e.printStackTrace();
+		}finally {
+			state.getLock().unlock();
 		}
 	}
 	
