@@ -115,8 +115,11 @@ public class EntryManager {
 				if(!response.isSuccess()) 
 					resender.submitResend(server.getClusterFollowBehaviour()[i],response);
 				if(response.getTerm() > state.getCurrentTerm() || 
-						(response.getTerm() == state.getCurrentTerm() && response.getLastEntry().getIndex() > state.getLastEntry().getIndex()))
+						(response.getTerm() == state.getCurrentTerm() && response.getLastEntry().getIndex() > state.getLastEntry().getIndex())) {
 					server.setMode(Mode.FOLLOWER);
+					if(server.getMonitorClient() != null)
+						server.getMonitorClient().updateStatus();
+				}
 			}
 		}
 
@@ -168,8 +171,6 @@ public class EntryManager {
 		private void resendTo(FollowerBehaviour follower, AppendResponse response) {
 			try {
 				resEntries =  state.getEntriesSince(response.getLastEntry().getIndex()+1,server.getChunckSize());
-				System.out.println("--------------------------------------------------------------------------------------------------------------------");
-				System.out.println("SENDING "+response.getLastEntry().getIndex());
 				state.getLock().lock();
 				long term = state.getCurrentTerm();
 				long prevLogIndex = response.getLastEntry().getIndex();
@@ -190,9 +191,9 @@ public class EntryManager {
 
 				if(response.getTerm() > state.getCurrentTerm() || 
 						(response.getTerm() == state.getCurrentTerm() && response.getLastEntry().getIndex() > state.getLastEntry().getIndex())) {
-					System.out.println( response.getLastEntry());
-					System.out.println(state.getLastEntry());
 					server.setMode(Mode.FOLLOWER);
+					if(server.getMonitorClient() != null)
+						server.getMonitorClient().updateStatus();
 				}
 
 			} catch (Exception e) {

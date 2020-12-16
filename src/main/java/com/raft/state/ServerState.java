@@ -203,7 +203,6 @@ public class ServerState implements Serializable{
 
 	public void setCommitIndex(long index) {
 		try {
-			//			System.out.println("Called commit Index");
 			lock.lock();
 
 			if(commitIndex>index)
@@ -231,7 +230,6 @@ public class ServerState implements Serializable{
 			assessSnapshot(commitedEntries.size());
 		}finally {
 			lock.unlock();
-			//			System.out.println("Exiting commit Index");
 		}
 	}
 
@@ -428,7 +426,6 @@ public class ServerState implements Serializable{
 		logLock.lock();
 		try {
 			if(logWriter!= null)logWriter.close();
-			System.out.println("CLEARING LOG ");
 			File file = new File(logFilePath);
 			if(file.delete())
 				file.createNewFile();

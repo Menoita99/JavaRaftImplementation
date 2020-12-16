@@ -208,27 +208,21 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 
 		long currentTerm = state.getCurrentTerm();
 		if(term<currentTerm) {
-			System.out.println(selfId+" NOT "+candidateId+" becuase term to low");
 			return new VoteResponse(currentTerm, false);
 		} else {
 			Address votedFor = state.getVotedFor(); 
 			if(votedFor != null && !candidateId.equals(this.state.getVotedFor())) {
-				System.out.println(selfId+" NOT "+candidateId+" because i already voted for "+votedFor);
 				return new VoteResponse(currentTerm, false);
 			}else if(votedFor != null && candidateId.equals(this.state.getVotedFor()) && term == currentTerm) {
-				System.out.println(selfId+" granted "+candidateId+" because i already voted for him");
 				restartTimer();
 				return new VoteResponse(currentTerm, true);
 			}else if (votedFor == null && state.getLastAplied().getIndex() <= lastEntryIndex) {
-				System.out.println(selfId+" granted "+candidateId+" because last entry is more recent or equals then mine");
 				restartTimer();
 				state.setVotedFor(candidateId);
 				return new VoteResponse(currentTerm, true);
 			}
 		}
 
-
-		System.out.println(selfId+" NOT "+candidateId+" idk");
 		return new VoteResponse(currentTerm, false);
 	}
 
@@ -261,9 +255,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		this.leaderId = leaderId;
 
 		boolean hasPreviousLog = state.hasLog(prevEntryTerm,prevEntryIndex);
-		//		long start = System.currentTimeMillis();
 		if(hasPreviousLog){
-			//sorts entries from log with minor index to the log with the bigger index
 			entries.sort((o1,o2) -> ((Long)(o1.getIndex()-o2.getIndex())).intValue());
 			for (Entry entry : entries) {
 				if(entry != null) {
@@ -279,20 +271,12 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 					}
 				}
 			}
-			//
-			//			System.out.println("leaderCommit "+leaderCommit);
-			//			System.out.println("state commit "+state.getLastEntry().getIndex());
-			//			System.out.println("commit "+ (leaderCommit > state.getCommitIndex()));
 			if(leaderCommit > state.getCommitIndex())
 				state.setCommitIndex((Math.min(leaderCommit, state.getLastEntry().getIndex())));
-			//			System.out.println("Time to evaluate: "+(System.currentTimeMillis()-start)+" "+entries.size()+" entries");
-			//			System.out.println("----------------------------------------");
 		}
 		if(monitorClient != null && !entries.isEmpty())
 			monitorClient.updateStatus();
 
-		if(entries.size()>1)
-			System.out.println("My state last entry "+state.getLastEntry());
 		return new AppendResponse(state.getLastEntry(),state.getCurrentTerm(), hasPreviousLog);
 	}
 
@@ -449,8 +433,6 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 			serverResponse = new ServerResponse(selfId,  command);
 
 			String clientIP = commandID.split(":")[0];
-			//if there already is an entry from the client requesting command, and this command has already been executed, directly sends response
-			//which had been stored when it was originally executed
 			for (String key : state.getInterpreter().getOperationsMap().keySet()) {
 				if(key.equals(clientIP)) {
 					if (state.getInterpreter().getOperationsMap().get(key).getOperationID().equals(commandID)) {
@@ -490,7 +472,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		this.leaderId = leaderId;
 
 		try {
-			System.out.println(snapshot.getState().getCommitIndex());
+			System.out.println("Receved and installing snapshot "+snapshot.getState().getCommitIndex());
 			snapshot.getState().setRootPath(root);
 			state.close();
 			snapshot.snap();
@@ -501,6 +483,7 @@ public class Server extends Leader implements Serializable, FollowerBehaviour{
 		}
 		if(monitorClient != null)
 			monitorClient.updateStatus();
+		restartTimer();
 		return true;
 	}
 
